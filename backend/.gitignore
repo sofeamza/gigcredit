@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+env/
+
+# Environment variables
+.env
+
+# ML model file (optional but recommended)
+ml_model.pkl
+
+# Logs
+*.log
+
+# Node (if frontend exists later)
+node_modules/
+build/
