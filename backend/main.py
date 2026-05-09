@@ -47,3 +47,18 @@ def calculate_score(profile: Profile):
         "model_used": result["model_used"],
         "explanation": explanation
     }
+
+from fastapi import Depends
+from services.auth_service import get_current_user
+
+@app.get("/protected-test")
+def protected_test(current_user: dict = Depends(get_current_user)):
+    return {
+        "message": "You are authenticated",
+        "user": current_user
+    }
+
+from routes.score import router as score_router
+
+app.include_router(score_router)
+
