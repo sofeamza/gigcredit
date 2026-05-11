@@ -65,3 +65,7 @@ app.include_router(score_router)
 from routes.simulation import router as simulation_router
 
 app.include_router(simulation_router)
+
+from routes.data import router as data_router
+
+app.include_router(data_router)
