@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import {
   LayoutDashboard,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/auth-context"
 
 const navItems = [
   {
@@ -47,7 +48,18 @@ const navItems = [
 
 export function AppNavbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
+
+  // Get user display info
+  const displayName = user?.name || user?.email?.split("@")[0] || "User"
+  const initials = displayName.slice(0, 2).toUpperCase()
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -99,14 +111,14 @@ export function AppNavbar() {
         <div className="hidden md:flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-              AR
+              {initials}
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-medium text-card-foreground leading-none">
-                Ahmad Rizal
+                {displayName}
               </span>
               <span className="text-xs text-muted-foreground leading-tight">
-                WKR-001
+                {user?.email || "Worker"}
               </span>
             </div>
           </div>
@@ -114,12 +126,10 @@ export function AppNavbar() {
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground"
-            asChild
+            onClick={handleLogout}
           >
-            <Link href="/">
-              <LogOut className="w-4 h-4" />
-              <span className="sr-only">Sign Out</span>
-            </Link>
+            <LogOut className="w-4 h-4" />
+            <span className="sr-only">Sign Out</span>
           </Button>
         </div>
 
@@ -172,25 +182,28 @@ export function AppNavbar() {
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                AR
+                {initials}
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-card-foreground leading-none">
-                  Ahmad Rizal
+                  {displayName}
                 </span>
                 <span className="text-xs text-muted-foreground leading-tight">
-                  WKR-001
+                  {user?.email || "Worker"}
                 </span>
               </div>
             </div>
-            <Link
-              href="/"
-              onClick={() => setMobileOpen(false)}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false)
+                handleLogout()
+              }}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
-            </Link>
+            </button>
           </div>
         </div>
       )}

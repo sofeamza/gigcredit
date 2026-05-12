@@ -77,3 +77,31 @@ async def upload_data(
         "records_inserted": len(records)
     }
 
+
+@router.get("/profiles")
+async def get_profiles(current_user: dict = Depends(get_current_user)):
+    """Get all profile data for the current user"""
+    profiles = list(
+        profiles_col.find(
+            {"user_email": current_user["email"]},
+            {"_id": 0}
+        ).sort("month", -1)
+    )
+
+    return profiles
+
+
+@router.get("/profiles/latest")
+async def get_latest_profile(current_user: dict = Depends(get_current_user)):
+    """Get the most recent profile data for the current user"""
+    profile = profiles_col.find_one(
+        {"user_email": current_user["email"]},
+        {"_id": 0},
+        sort=[("month", -1)]
+    )
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="No profile data found")
+
+    return profile
+

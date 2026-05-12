@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from config import users_col, profiles_col, scores_col, explanations_col
 
 from routes.auth import router as auth_router
@@ -7,6 +8,19 @@ from routes.simulation import router as simulation_router
 from routes.data import router as data_router
 
 app = FastAPI(title="GigCredit API")
+
+# CORS configuration for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://*.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth_router)
 app.include_router(score_router)

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 from config import users_col
-from services.auth_service import hash_password, verify_password, create_token
+from services.auth_service import hash_password, verify_password, create_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -47,4 +47,21 @@ def login(req: LoginRequest):
     token = create_token({"email": req.email})
 
     return {"message": "Login successful", "token": token}
+
+
+@router.get("/me")
+def get_me(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated user profile"""
+    user = users_col.find_one({"email": current_user["email"]})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "email": user["email"],
+        "role": user.get("role", "worker"),
+        "name": user.get("name"),
+        "platform": user.get("platform"),
+        "joinedDate": user.get("joined_date")
+    }
 

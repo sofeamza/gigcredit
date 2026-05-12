@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import {
   Link2,
   Unlink,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Platform {
   id: string
@@ -84,11 +86,28 @@ const oauthSteps = [
 ]
 
 export default function ConnectPage() {
+  const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [platforms, setPlatforms] = useState<Platform[]>(initialPlatforms)
   const [oauthModal, setOauthModal] = useState<string | null>(null)
   const [oauthStep, setOauthStep] = useState(0)
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/")
+    }
+  }, [authLoading, isAuthenticated, router])
+
   const connectedCount = platforms.filter((p) => p.status === "connected").length
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   const simulateOAuth = useCallback((platformId: string) => {
     setOauthModal(platformId)

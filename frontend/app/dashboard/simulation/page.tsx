@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   SlidersHorizontal,
   RotateCcw,
@@ -13,10 +14,16 @@ import {
   Brain,
   Calculator,
   Info,
+  Loader2,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { ScoreGauge } from "@/components/score-gauge"
+import { useAuth } from "@/contexts/auth-context"
+import { useCurrentScore } from "@/lib/hooks"
+import { simulateScore as apiSimulateScore, type ProfileInput } from "@/lib/api"
 import {
   mockCreditScore,
   mockUserFactors,
@@ -24,8 +31,6 @@ import {
 } from "@/lib/mock-data"
 import {
   calculateScore,
-  calculateBaselineScore,
-  calculateMLScore,
   FACTOR_RANGES,
   WEIGHTS,
   SAFETY_THRESHOLD,
@@ -45,6 +50,26 @@ interface FactorSlider {
 }
 
 export default function SimulationPage() {
+  const router = useRouter()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { data: currentScoreData } = useCurrentScore()
+
+  const [useBackendSimulation, setUseBackendSimulation] = useState(true)
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [backendScore, setBackendScore] = useState<number | null>(null)
+  const [backendExplanation, setBackendExplanation] = useState<string[]>([])
+  const [backendModelUsed, setBackendModelUsed] = useState<string>("baseline")
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/")
+    }
+  }, [authLoading, isAuthenticated, router])
+
+  // Get current score from API or mock
+  const currentScore = currentScoreData?.score_value ?? mockCreditScore.value
+
   const initialFactors: FactorSlider[] = [
     {
       key: "taskCompletion",
@@ -104,15 +129,56 @@ export default function SimulationPage() {
     return input as unknown as FactorInput
   }, [factors])
 
-  // Run the full dual-model scoring engine
-  const scoringResult = useMemo(
+  // Run the local dual-model scoring engine (fallback)
+  const localScoringResult = useMemo(
     () => calculateScore(simulatedInput),
     [simulatedInput]
   )
 
-  const projectedScore = scoringResult.finalScore
-  const scoreDiff = projectedScore - mockCreditScore.value
+  // Determine which score to show
+  const projectedScore = useBackendSimulation && backendScore !== null
+    ? backendScore
+    : localScoringResult.finalScore
+
+  const scoreDiff = projectedScore - currentScore
   const hasChanges = factors.some((f) => f.newValue !== f.currentValue)
+
+  // Call backend simulation API when factors change
+  useEffect(() => {
+    if (!hasChanges || !useBackendSimulation || !user) {
+      setBackendScore(null)
+      return
+    }
+
+    const runSimulation = async () => {
+      setIsSimulating(true)
+      try {
+        const profileInput: ProfileInput = {
+          user_id: user.email,
+          platform_name: "Grab",
+          task_completion_rate: factors.find(f => f.key === "taskCompletion")!.newValue / 100,
+          gps_consistency: factors.find(f => f.key === "gpsConsistency")!.newValue / 30,
+          customer_rating: factors.find(f => f.key === "customerRating")!.newValue,
+          platform_diversity: factors.find(f => f.key === "platformDiversity")!.newValue,
+          daily_earnings: Array(30).fill(50), // Mock earnings for simulation
+        }
+
+        const result = await apiSimulateScore(profileInput)
+        setBackendScore(result.score)
+        setBackendExplanation(result.explanation)
+        setBackendModelUsed(result.model_used)
+      } catch (error) {
+        console.log("[v0] Backend simulation failed, using local scoring:", error)
+        setBackendScore(null)
+      } finally {
+        setIsSimulating(false)
+      }
+    }
+
+    // Debounce the API call
+    const timeoutId = setTimeout(runSimulation, 500)
+    return () => clearTimeout(timeoutId)
+  }, [factors, hasChanges, useBackendSimulation, user])
 
   function handleSliderChange(key: string, value: number[]) {
     setFactors((prev) =>
@@ -124,6 +190,15 @@ export default function SimulationPage() {
   function handleReset() {
     setFactors(initialFactors)
     setHasSimulated(false)
+    setBackendScore(null)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -134,19 +209,34 @@ export default function SimulationPage() {
             What-If Simulation
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Adjust the sliders to see how changes would impact your credit score using the dual-model engine
+            Adjust the sliders to see how changes would impact your credit score
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleReset}
-          disabled={!hasChanges}
-          className="self-start bg-transparent"
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Reset
-        </Button>
+        <div className="flex items-center gap-2 self-start">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setUseBackendSimulation(!useBackendSimulation)}
+            className="bg-transparent"
+          >
+            {useBackendSimulation ? (
+              <Wifi className="w-4 h-4 mr-2 text-success" />
+            ) : (
+              <WifiOff className="w-4 h-4 mr-2 text-muted-foreground" />
+            )}
+            {useBackendSimulation ? "Live API" : "Local"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            disabled={!hasChanges}
+            className="bg-transparent"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -245,10 +335,15 @@ export default function SimulationPage() {
         {/* Projected Score Panel */}
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-border bg-card p-6 sticky top-8 space-y-5">
-            <h2 className="text-base font-semibold text-card-foreground text-center">
-              {hasSimulated ? "Projected Score" : "Current Score"}
-            </h2>
-            <ScoreGauge score={hasSimulated ? projectedScore : mockCreditScore.value} size="lg" />
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-base font-semibold text-card-foreground text-center">
+                {hasSimulated ? "Projected Score" : "Current Score"}
+              </h2>
+              {isSimulating && (
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              )}
+            </div>
+            <ScoreGauge score={hasSimulated ? projectedScore : currentScore} size="lg" />
 
             {/* Dual Model Breakdown */}
             {hasSimulated && (
@@ -261,16 +356,20 @@ export default function SimulationPage() {
                       <span className="text-xs text-muted-foreground">Baseline</span>
                     </div>
                     <p className="text-lg font-bold text-card-foreground tabular-nums">
-                      {scoringResult.baselineScore}
+                      {localScoringResult.baselineScore}
                     </p>
                   </div>
                   <div className="rounded-lg border border-border p-3 text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Brain className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">ML Model</span>
+                      <span className="text-xs text-muted-foreground">
+                        {useBackendSimulation && backendScore !== null ? "Backend ML" : "ML Model"}
+                      </span>
                     </div>
                     <p className="text-lg font-bold text-card-foreground tabular-nums">
-                      {scoringResult.mlScore}
+                      {useBackendSimulation && backendScore !== null
+                        ? backendScore
+                        : localScoringResult.mlScore}
                     </p>
                   </div>
                 </div>
@@ -278,12 +377,12 @@ export default function SimulationPage() {
                 {/* Safety Check Status */}
                 <div
                   className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                    scoringResult.safetyTriggered
+                    localScoringResult.safetyTriggered
                       ? "bg-destructive/10"
                       : "bg-success/10"
                   }`}
                 >
-                  {scoringResult.safetyTriggered ? (
+                  {localScoringResult.safetyTriggered ? (
                     <ShieldAlert className="w-4 h-4 text-destructive shrink-0" />
                   ) : (
                     <ShieldCheck className="w-4 h-4 text-success shrink-0" />
@@ -291,23 +390,38 @@ export default function SimulationPage() {
                   <div>
                     <p
                       className={`font-medium ${
-                        scoringResult.safetyTriggered
+                        localScoringResult.safetyTriggered
                           ? "text-destructive"
                           : "text-success"
                       }`}
                     >
-                      {scoringResult.safetyTriggered
-                        ? "Safety Triggered - Using Baseline"
-                        : `Using ${scoringResult.modelUsed === "ml" ? "ML Model" : "Baseline"}`}
+                      {useBackendSimulation && backendScore !== null
+                        ? `Backend: ${backendModelUsed.toUpperCase()}`
+                        : localScoringResult.safetyTriggered
+                          ? "Safety Triggered - Using Baseline"
+                          : `Using ${localScoringResult.modelUsed === "ml" ? "ML Model" : "Baseline"}`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Discrepancy: {scoringResult.discrepancy} pts
-                      {scoringResult.safetyTriggered
-                        ? ` (>${SAFETY_THRESHOLD} threshold)`
-                        : ` (<${SAFETY_THRESHOLD} threshold)`}
+                      {useBackendSimulation && backendScore !== null
+                        ? "Score from backend API"
+                        : `Discrepancy: ${localScoringResult.discrepancy} pts`}
                     </p>
                   </div>
                 </div>
+
+                {/* Backend Explanation */}
+                {useBackendSimulation && backendExplanation.length > 0 && (
+                  <div className="space-y-1 p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Backend Explanation
+                    </p>
+                    {backendExplanation.slice(0, 3).map((exp, idx) => (
+                      <p key={idx} className="text-xs text-muted-foreground">
+                        {exp}
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 {/* Score Change */}
                 {hasChanges && (
@@ -316,7 +430,7 @@ export default function SimulationPage() {
                       <div className="text-center">
                         <p className="text-xs text-muted-foreground">Current</p>
                         <p className="text-lg font-bold text-card-foreground">
-                          {mockCreditScore.value}
+                          {currentScore}
                         </p>
                       </div>
                       <ArrowRight className="w-5 h-5 text-muted-foreground" />
@@ -374,10 +488,10 @@ export default function SimulationPage() {
                     SHAP Factor Contributions
                   </p>
                   {[
-                    { label: "Task Completion", value: scoringResult.shapBreakdown.taskCompletion },
-                    { label: "GPS Consistency", value: scoringResult.shapBreakdown.gpsConsistency },
-                    { label: "Customer Rating", value: scoringResult.shapBreakdown.customerRating },
-                    { label: "Platform Diversity", value: scoringResult.shapBreakdown.platformDiversity },
+                    { label: "Task Completion", value: localScoringResult.shapBreakdown.taskCompletion },
+                    { label: "GPS Consistency", value: localScoringResult.shapBreakdown.gpsConsistency },
+                    { label: "Customer Rating", value: localScoringResult.shapBreakdown.customerRating },
+                    { label: "Platform Diversity", value: localScoringResult.shapBreakdown.platformDiversity },
                   ].map((item) => (
                     <div
                       key={item.label}

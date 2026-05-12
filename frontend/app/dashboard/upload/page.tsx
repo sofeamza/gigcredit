@@ -2,7 +2,8 @@
 
 import React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   Upload,
   FileText,
@@ -14,9 +15,12 @@ import {
   Star,
   Clock,
   Info,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
+import { uploadCSV, ApiError } from "@/lib/api"
 
 interface UploadedFile {
   id: string
@@ -26,6 +30,9 @@ interface UploadedFile {
   status: "uploading" | "success" | "error"
   progress: number
   category: string
+  errorMessage?: string
+  recordsInserted?: number
+  file?: File
 }
 
 const dataCategories = [
@@ -64,12 +71,22 @@ const dataCategories = [
 ]
 
 export default function UploadPage() {
+  const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>("task_logs")
+  const [isUploading, setIsUploading] = useState(false)
 
-  const simulateUpload = useCallback(
-    (file: File) => {
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/")
+    }
+  }, [authLoading, isAuthenticated, router])
+
+  const uploadFile = useCallback(
+    async (file: File) => {
       const uploadedFile: UploadedFile = {
         id: `${Date.now()}-${Math.random()}`,
         name: file.name,
@@ -78,32 +95,80 @@ export default function UploadPage() {
         status: "uploading",
         progress: 0,
         category: selectedCategory,
+        file: file,
       }
 
       setFiles((prev) => [uploadedFile, ...prev])
 
-      // Simulate upload progress
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 30
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadedFile.id
-                ? { ...f, progress: 100, status: "success" as const }
-                : f
+      // Only allow CSV files to be uploaded to the backend
+      if (!file.name.endsWith(".csv")) {
+        // Simulate progress for non-CSV files (demo mode)
+        let progress = 0
+        const interval = setInterval(() => {
+          progress += Math.random() * 30
+          if (progress >= 100) {
+            progress = 100
+            clearInterval(interval)
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === uploadedFile.id
+                  ? { ...f, progress: 100, status: "success" as const }
+                  : f
+              )
             )
-          )
-        } else {
+          } else {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === uploadedFile.id ? { ...f, progress } : f
+              )
+            )
+          }
+        }, 300)
+        return
+      }
+
+      // Real upload for CSV files
+      try {
+        // Simulate progress while uploading
+        let progress = 0
+        const progressInterval = setInterval(() => {
+          progress = Math.min(progress + 10, 80)
           setFiles((prev) =>
             prev.map((f) =>
               f.id === uploadedFile.id ? { ...f, progress } : f
             )
           )
-        }
-      }, 300)
+        }, 200)
+
+        const result = await uploadCSV(file)
+        
+        clearInterval(progressInterval)
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadedFile.id
+              ? {
+                  ...f,
+                  progress: 100,
+                  status: "success" as const,
+                  recordsInserted: result.records_inserted,
+                }
+              : f
+          )
+        )
+      } catch (error) {
+        const errorMessage = error instanceof ApiError 
+          ? error.detail 
+          : "Upload failed. Please try again."
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadedFile.id
+              ? { ...f, status: "error" as const, errorMessage }
+              : f
+          )
+        )
+      }
     },
     [selectedCategory]
   )
@@ -114,10 +179,10 @@ export default function UploadPage() {
       setDragOver(false)
       const droppedFiles = Array.from(e.dataTransfer.files)
       for (const file of droppedFiles) {
-        simulateUpload(file)
+        uploadFile(file)
       }
     },
-    [simulateUpload]
+    [uploadFile]
   )
 
   const handleFileInput = useCallback(
@@ -125,12 +190,12 @@ export default function UploadPage() {
       const selectedFiles = e.target.files
       if (selectedFiles) {
         for (const file of Array.from(selectedFiles)) {
-          simulateUpload(file)
+          uploadFile(file)
         }
       }
       e.target.value = ""
     },
-    [simulateUpload]
+    [uploadFile]
   )
 
   const removeFile = (id: string) => {
@@ -141,6 +206,23 @@ export default function UploadPage() {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const processUploadedData = async () => {
+    setIsUploading(true)
+    // In a real app, this would trigger score recalculation
+    // For now, just redirect to dashboard after a short delay
+    setTimeout(() => {
+      router.push("/dashboard")
+    }, 1500)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -242,6 +324,22 @@ export default function UploadPage() {
         </p>
       </div>
 
+      {/* Required CSV Format */}
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+        <FileSpreadsheet className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            Required CSV Format for Backend Processing
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed font-mono">
+            worker_id, platform, month, total_tasks_assigned, tasks_completed, cancellation_rate, avg_rating, active_days, gps_consistency, total_earnings
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            CSV files matching this format will be processed by the backend API. Other file types work in demo mode.
+          </p>
+        </div>
+      </div>
+
       {/* Info Banner */}
       <div className="flex items-start gap-3 p-4 rounded-xl bg-accent border border-accent-foreground/10">
         <Info className="w-5 h-5 text-accent-foreground shrink-0 mt-0.5" />
@@ -313,11 +411,14 @@ export default function UploadPage() {
                   {file.status === "success" && (
                     <p className="text-xs text-success mt-0.5">
                       Upload complete
+                      {file.recordsInserted !== undefined && (
+                        <span> - {file.recordsInserted} records inserted</span>
+                      )}
                     </p>
                   )}
                   {file.status === "error" && (
                     <p className="text-xs text-destructive mt-0.5">
-                      Upload failed. Please try again.
+                      {file.errorMessage || "Upload failed. Please try again."}
                     </p>
                   )}
                 </div>
@@ -335,9 +436,18 @@ export default function UploadPage() {
 
           {files.some((f) => f.status === "success") && (
             <div className="mt-4 flex justify-end">
-              <Button>
-                Process Uploaded Data
-                <CheckCircle2 className="w-4 h-4 ml-2" />
+              <Button onClick={processUploadedData} disabled={isUploading}>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    Process Uploaded Data
+                    <CheckCircle2 className="w-4 h-4 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           )}
