@@ -1,3 +1,6 @@
+import os
+import numpy as np
+
 def calculate_baseline(profile):
     n_tc = profile.task_completion_rate
     n_gps = profile.gps_consistency
@@ -24,14 +27,29 @@ def validate_profile(profile):
 
     if any(e < 0 for e in profile.daily_earnings):
         raise ValueError("Daily earnings cannot be negative")
-    
 
-import joblib
-import numpy as np
 
-ml_model = joblib.load("ml_model.pkl")
+# Try to load ML model, fall back to None if not available
+ml_model = None
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml_model.pkl")
+
+try:
+    import joblib
+    if os.path.exists(MODEL_PATH):
+        ml_model = joblib.load(MODEL_PATH)
+        print(f"ML model loaded from {MODEL_PATH}")
+    else:
+        print(f"ML model not found at {MODEL_PATH}, using baseline scoring")
+except ImportError:
+    print("joblib not installed, using baseline scoring")
+except Exception as e:
+    print(f"Error loading ML model: {e}, using baseline scoring")
+
 
 def calculate_ml_score(profile):
+    if ml_model is None:
+        return None
+    
     features = np.array([[
         profile.task_completion_rate,
         profile.gps_consistency,
@@ -41,22 +59,35 @@ def calculate_ml_score(profile):
 
     return float(ml_model.predict(features)[0])
 
-from services.shap_explainer import explain_ml
 
 def get_score(profile):
     baseline = calculate_baseline(profile)
-    ml_score = calculate_ml_score(profile)
+    
+    # Try ML scoring if model is available
+    if ml_model is not None:
+        try:
+            ml_score = calculate_ml_score(profile)
+            
+            if ml_score is not None:
+                # safety check
+                if abs(ml_score - baseline) > 100:
+                    return {
+                        "score": baseline,
+                        "model_used": "baseline",
+                        "explanation_mode": "rule_based"
+                    }
 
-    # safety check
-    if abs(ml_score - baseline) > 100:
-        return {
-            "score": baseline,
-            "model_used": "baseline",
-            "explanation_mode": "rule_based"
-        }
-
+                return {
+                    "score": round(ml_score),
+                    "model_used": "ml",
+                    "explanation_mode": "shap"
+                }
+        except Exception as e:
+            print(f"ML scoring failed: {e}, falling back to baseline")
+    
+    # Fall back to baseline scoring
     return {
-        "score": round(ml_score),
-        "model_used": "ml",
-        "explanation_mode": "shap"
+        "score": baseline,
+        "model_used": "baseline",
+        "explanation_mode": "rule_based"
     }
