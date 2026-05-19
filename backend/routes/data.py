@@ -77,3 +77,22 @@ async def upload_data(
         "records_inserted": len(records)
     }
 
+@router.get("/my-profile")
+def get_my_profile(current_user: dict = Depends(get_current_user)):
+    profile = profiles_col.find_one(
+        {"user_email": current_user["email"]},
+        {"_id": 0}
+    )
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="No uploaded profile found")
+
+    return {
+        "user_id": profile["worker_id"],
+        "platform_name": profile["platform_name"],
+        "task_completion_rate": profile["task_completion_rate"],
+        "gps_consistency": profile["gps_consistency"],
+        "customer_rating": profile["customer_rating"],
+        "platform_diversity": profile["platform_diversity"],
+        "daily_earnings": [profile["total_earnings"]]
+    }

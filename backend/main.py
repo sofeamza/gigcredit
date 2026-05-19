@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from config import users_col, profiles_col, scores_col, explanations_col
 
 from routes.auth import router as auth_router
@@ -8,6 +10,19 @@ from routes.data import router as data_router
 
 app = FastAPI(title="GigCredit API")
 
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routes
 app.include_router(auth_router)
 app.include_router(score_router)
 app.include_router(simulation_router)
@@ -27,3 +42,7 @@ def create_indexes():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+from routes.admin import router as admin_router
+
+app.include_router(admin_router)

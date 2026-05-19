@@ -48,3 +48,17 @@ def login(req: LoginRequest):
 
     return {"message": "Login successful", "token": token}
 
+from services.auth_service import get_current_user
+from fastapi import Depends
+
+@router.get("/me")
+def get_me(current_user: dict = Depends(get_current_user)):
+    user = users_col.find_one(
+        {"email": current_user["email"]},
+        {"_id": 0, "email": 1, "role": 1}
+    )
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user

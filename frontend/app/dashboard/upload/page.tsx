@@ -2,6 +2,8 @@
 
 import React from "react"
 
+import { uploadDataFile } from "@/lib/api"
+
 import { useState, useCallback } from "react"
 import {
   Upload,
@@ -68,42 +70,47 @@ export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>("task_logs")
 
-  const simulateUpload = useCallback(
-    (file: File) => {
+  const uploadFile = useCallback(
+    async (file: File) => {
       const uploadedFile: UploadedFile = {
         id: `${Date.now()}-${Math.random()}`,
         name: file.name,
         size: file.size,
         type: file.type,
         status: "uploading",
-        progress: 0,
+        progress: 20,
         category: selectedCategory,
       }
 
       setFiles((prev) => [uploadedFile, ...prev])
 
-      // Simulate upload progress
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 30
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadedFile.id
-                ? { ...f, progress: 100, status: "success" as const }
-                : f
-            )
+      try {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadedFile.id ? { ...f, progress: 60 } : f
           )
-        } else {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadedFile.id ? { ...f, progress } : f
-            )
+        )
+
+        await uploadDataFile(file)
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadedFile.id
+              ? { ...f, progress: 100, status: "success" as const }
+              : f
           )
-        }
-      }, 300)
+        )
+      } catch (error) {
+        console.error("Upload failed:", error)
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadedFile.id
+              ? { ...f, status: "error" as const, progress: 100 }
+              : f
+          )
+        )
+      }
     },
     [selectedCategory]
   )
@@ -114,10 +121,10 @@ export default function UploadPage() {
       setDragOver(false)
       const droppedFiles = Array.from(e.dataTransfer.files)
       for (const file of droppedFiles) {
-        simulateUpload(file)
+        uploadFile(file)
       }
     },
-    [simulateUpload]
+    [uploadFile]
   )
 
   const handleFileInput = useCallback(
@@ -125,12 +132,12 @@ export default function UploadPage() {
       const selectedFiles = e.target.files
       if (selectedFiles) {
         for (const file of Array.from(selectedFiles)) {
-          simulateUpload(file)
+          uploadFile(file)
         }
       }
       e.target.value = ""
     },
-    [simulateUpload]
+    [uploadFile]
   )
 
   const removeFile = (id: string) => {

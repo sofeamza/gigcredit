@@ -2,6 +2,9 @@
 
 import React from "react"
 
+import { loginUser, registerUser } from "@/lib/api"
+import { getCurrentUser } from "@/lib/api"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -28,12 +31,30 @@ export default function LoginPage() {
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      router.push("/dashboard")
-    }, 800)
+
+    try {
+      const res = isLogin
+        ? await loginUser(email, password)
+        : await registerUser(email, password)
+
+      localStorage.setItem("token", res.data.token)
+
+      const userRes = await getCurrentUser()
+
+      if (userRes.data.role === "admin") {
+        router.push("/dashboard/admin")
+      } else {
+        router.push("/dashboard")
+      }
+
+    } catch (error: any) {
+      alert(error.response?.data?.detail || "Authentication failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

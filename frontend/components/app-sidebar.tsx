@@ -16,8 +16,10 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useEffect } from "react"
+import { getCurrentUser } from "@/lib/api"
 
-const navItems = [
+const baseNavItems = [
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -38,16 +40,31 @@ const navItems = [
     href: "/dashboard/upload",
     icon: Upload,
   },
-  {
-    label: "Admin",
-    href: "/dashboard/admin",
-    icon: ShieldCheck,
-  },
 ]
 
 export function AppNavbar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    getCurrentUser()
+      .then((res) => setUser(res.data))
+      .catch(() => setUser(null))
+  }, [])
+
+  const navItems =
+    user?.role === "admin"
+      ? [
+          ...baseNavItems,
+          {
+            label: "Admin",
+            href: "/dashboard/admin",
+            icon: ShieldCheck,
+          },
+        ]
+      : baseNavItems
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
