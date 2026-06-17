@@ -6,8 +6,8 @@ import { FactorCard } from "@/components/factor-card"
 import { ScoreHistoryChart } from "@/components/score-history-chart"
 import { ProfileSummary } from "@/components/profile-summary"
 import { ScoreInsights } from "@/components/score-insights"
-import { calculateScore, getScoreHistory, getMyProfile } from "@/lib/api"
-import { mockCreditScore, mockUser } from "@/lib/mock-data"
+import { calculateScore, getScoreHistory, getMyProfile, getCurrentUser } from "@/lib/api"
+import { mockCreditScore } from "@/lib/mock-data"
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +18,7 @@ import { Info } from "lucide-react"
 
 export default function DashboardPage() {
   const [score, setScore] = useState<any>(mockCreditScore)
+  const [profileUser, setProfileUser] = useState<any>(null)
   const [factors, setFactors] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,8 +27,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const profileRes = await getMyProfile()
+        const [profileRes, userRes] = await Promise.all([getMyProfile(), getCurrentUser()])
         const profile = profileRes.data
+
+        setProfileUser({
+          id: profile.user_id,
+          email: userRes.data.email,
+          platform: profile.platform_name,
+        })
 
         const scoreRes = await calculateScore(profile)
         const historyRes = await getScoreHistory()
@@ -188,7 +195,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <ProfileSummary user={mockUser} score={score} />
+        <ProfileSummary user={profileUser} score={score} />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6">

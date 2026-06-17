@@ -1,41 +1,48 @@
-import { Calendar, Briefcase, Mail } from "lucide-react"
-import type { GigWorkerProfile, CreditScore } from "@/lib/mock-data"
+import { Briefcase, Mail, IdCard } from "lucide-react"
+import type { CreditScore } from "@/lib/mock-data"
+
+interface ProfileUser {
+  id: string
+  email: string
+  platform: string
+}
 
 interface ProfileSummaryProps {
-  user: GigWorkerProfile
+  user: ProfileUser | null
   score: CreditScore
 }
 
 export function ProfileSummary({ user, score }: ProfileSummaryProps) {
+  const initials = user?.email
+    ? user.email.split("@")[0].slice(0, 2).toUpperCase()
+    : "?"
+
   return (
     <div className="rounded-xl border border-border bg-card p-6 flex flex-col gap-5">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-11 h-11 rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-          {user.name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")}
+          {initials}
         </div>
         <div>
-          <p className="text-sm font-semibold text-card-foreground">{user.name}</p>
-          <p className="text-xs text-muted-foreground">{user.id}</p>
+          <p className="text-sm font-semibold text-card-foreground">
+            {user?.email?.split("@")[0] ?? "—"}
+          </p>
+          <p className="text-xs text-muted-foreground">{user?.id ?? "—"}</p>
         </div>
       </div>
 
       <div className="space-y-3">
         <div className="flex items-center gap-3 text-sm">
-          <Mail className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">{user.email}</span>
+          <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground truncate">{user?.email ?? "—"}</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <Briefcase className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">{user.platform}</span>
+          <Briefcase className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">{user?.platform ?? "—"}</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">
-            Joined {new Date(user.joinedDate).toLocaleDateString("en-MY", { month: "long", year: "numeric" })}
-          </span>
+          <IdCard className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">Worker ID: {user?.id ?? "—"}</span>
         </div>
       </div>
 
