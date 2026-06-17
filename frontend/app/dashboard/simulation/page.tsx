@@ -184,7 +184,7 @@ export default function SimulationPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div   data-tour="simulation-panel" className="space-y-6 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -316,8 +316,8 @@ export default function SimulationPage() {
               size="lg"
             />
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-3">
+            <div className="space-y-16">
+              <div className="flex items-center justify-center gap-3 mt-24">
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground">Current</p>
                   <p className="text-lg font-bold text-card-foreground">

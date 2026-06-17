@@ -135,7 +135,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div data-tour="dashboard-score" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 rounded-xl border border-border bg-card p-6">
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <ScoreGauge
@@ -158,7 +158,7 @@ export default function DashboardPage() {
       </div>
 
       <div>
-        <div className="mb-4">
+        <div data-tour="score-factors" className="mb-4">
           <h2 className="text-base font-semibold text-foreground">
             Score Factors (SHAP Breakdown)
           </h2>

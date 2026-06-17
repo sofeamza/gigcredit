@@ -23,7 +23,9 @@ export default function AdminPage() {
 
   async function loadAdminData() {
     try {
+      const t0 = performance.now()
       const statsRes = await getAdminStats()
+      const apiLatency = Math.round(performance.now() - t0)
       const usersRes = await getAdminUsers()
 
       const formattedUsers = usersRes.data.users.map((user: any, index: number) => ({
@@ -41,6 +43,7 @@ export default function AdminPage() {
         totalUsers: backendStats.total_users,
         activeUsers: backendStats.total_users,
         avgScore: backendStats.average_score,
+        apiLatency,
         totalProfiles: backendStats.total_profiles,
         totalScores: backendStats.total_scores,
 

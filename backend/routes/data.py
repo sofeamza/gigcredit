@@ -4,21 +4,10 @@ import io
 
 from services.auth_service import get_current_user
 from config import profiles_col
+from services.column_mapper import REQUIRED_COLUMNS, auto_map_columns, apply_column_mapping
+from datetime import datetime
 
 router = APIRouter(prefix="/data", tags=["Data"])
-
-REQUIRED_COLUMNS = [
-    "worker_id",
-    "platform",
-    "month",
-    "total_tasks_assigned",
-    "tasks_completed",
-    "cancellation_rate",
-    "avg_rating",
-    "active_days",
-    "gps_consistency",
-    "total_earnings"
-]
 
 
 @router.post("/upload")
@@ -26,23 +15,51 @@ async def upload_data(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files are allowed")
-
+    
     contents = await file.read()
 
+    filename = file.filename.lower()
+
     try:
-        df = pd.read_csv(io.BytesIO(contents))
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+
+        elif filename.endswith(".xlsx"):
+            df = pd.read_excel(io.BytesIO(contents))
+
+        elif filename.endswith(".json"):
+            df = pd.read_json(io.BytesIO(contents))
+
+        elif filename.endswith(".gpx"):
+            raise HTTPException(
+                status_code=400,
+                detail="GPX support coming soon"
+            )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type"
+            )
+
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid CSV file")
-
-    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-
-    if missing:
         raise HTTPException(
             status_code=400,
-            detail=f"Missing required columns: {missing}"
+            detail="Invalid file format"
         )
+
+    mapping, missing = auto_map_columns(df.columns)
+
+    if missing:
+        return {
+            "status": "mapping_required",
+            "message": "Some columns could not be recognized automatically.",
+            "detected_mapping": mapping,
+            "missing_columns": missing,
+            "uploaded_columns": list(df.columns)
+        }
+
+    df = apply_column_mapping(df, mapping)
 
     records = []
 
@@ -62,7 +79,8 @@ async def upload_data(
             "gps_consistency": float(row["gps_consistency"]),
             "customer_rating": float(row["avg_rating"]),
             "platform_diversity": 1,
-            "total_earnings": float(row["total_earnings"])
+            "total_earnings": float(row["total_earnings"]),
+            "uploaded_at": datetime.utcnow()
         }
 
         records.append(profile)
@@ -81,7 +99,8 @@ async def upload_data(
 def get_my_profile(current_user: dict = Depends(get_current_user)):
     profile = profiles_col.find_one(
         {"user_email": current_user["email"]},
-        {"_id": 0}
+        {"_id": 0},
+        sort=[("_id", -1)]
     )
 
     if not profile:

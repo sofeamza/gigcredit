@@ -56,4 +56,18 @@ export const deleteUser = (email: string) =>
 
 export const getCurrentUser = () => api.get("/auth/me")
 
+export const getFinancialInstitutions = () => api.get("/admin/financial-institutions")
+export const getWorkerScores = () => api.get("/admin/worker-scores")
+
+export const createFinancialInstitution = (institution_name: string, email: string, password: string) =>
+  api.post("/admin/financial-institutions", { institution_name, email, password })
+
+export const updateFIStatus = (email: string, status: "active" | "suspended") =>
+  api.patch(`/admin/financial-institutions/${encodeURIComponent(email)}/status`, { status })
+
+export const getFIAccessLogs = () => api.get("/admin/fi-access-logs")
+
+export const logFIAccess = (worker_email: string, score_value: number) =>
+  api.post("/admin/fi-access-logs", { worker_email, score_value })
+
 export default api

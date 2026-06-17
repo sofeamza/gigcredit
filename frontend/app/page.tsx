@@ -44,8 +44,11 @@ export default function LoginPage() {
 
       const userRes = await getCurrentUser()
 
-      if (userRes.data.role === "admin") {
+      const role = userRes.data.role
+      if (role === "admin") {
         router.push("/dashboard/admin")
+      } else if (role === "financial_institution") {
+        router.push("/dashboard/fi")
       } else {
         router.push("/dashboard")
       }

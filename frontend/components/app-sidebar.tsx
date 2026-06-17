@@ -12,7 +12,8 @@ import {
   CreditCard,
   Menu,
   X,
-  Link2, // This icon is used for the new menu item
+  Link2,
+  Building2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -54,23 +55,42 @@ export function AppNavbar() {
       .catch(() => setUser(null))
   }, [])
 
+  const userHandle = user?.email?.split("@")[0] ?? ""
+  const userInitials = userHandle.slice(0, 2).toUpperCase()
+
+  const adminNavItems = [
+    {
+      label: "Admin Panel",
+      href: "/dashboard/admin",
+      icon: ShieldCheck,
+    },
+    {
+      label: "Financial Institutions",
+      href: "/dashboard/admin/financial-institutions",
+      icon: Building2,
+    },
+  ]
+
+  const financialNavItems = [
+    {
+      label: "Credit Profiles",
+      href: "/dashboard/fi",
+      icon: LayoutDashboard,
+    },
+  ]
+
   const navItems =
     user?.role === "admin"
-      ? [
-          ...baseNavItems,
-          {
-            label: "Admin",
-            href: "/dashboard/admin",
-            icon: ShieldCheck,
-          },
-        ]
-      : baseNavItems
+      ? adminNavItems
+      : user?.role === "financial_institution"
+        ? financialNavItems
+        : baseNavItems
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="mx-auto flex h-14 items-center justify-between px-4 md:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+        <Link href={user?.role === "admin" ? "/dashboard/admin" : user?.role === "financial_institution" ? "/dashboard/fi" : "/dashboard"} className="flex items-center gap-2.5">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
             <CreditCard className="w-4 h-4 text-primary-foreground" />
           </div>
@@ -116,14 +136,14 @@ export function AppNavbar() {
         <div className="hidden md:flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-              AR
+              {userInitials}
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-medium text-card-foreground leading-none">
-                Ahmad Rizal
+                {userHandle}
               </span>
-              <span className="text-xs text-muted-foreground leading-tight">
-                WKR-001
+              <span className="text-xs text-muted-foreground leading-tight capitalize">
+                {user?.role ?? ""}
               </span>
             </div>
           </div>
@@ -189,14 +209,14 @@ export function AppNavbar() {
           <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                AR
+                {userInitials}
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-card-foreground leading-none">
-                  Ahmad Rizal
+                  {userHandle}
                 </span>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  WKR-001
+                <span className="text-xs text-muted-foreground leading-tight capitalize">
+                  {user?.role ?? ""}
                 </span>
               </div>
             </div>
