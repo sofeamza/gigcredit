@@ -175,17 +175,29 @@ def log_fi_access(req: LogFIAccessRequest, current_user: dict = Depends(require_
 
 @router.get("/worker-scores")
 def get_worker_scores(current_user: dict = Depends(require_admin_or_fi)):
-    # Latest score per worker
     pipeline = [
         {"$sort": {"created_at": -1}},
         {"$group": {
             "_id": "$user_email",
-            "score_value": {"$first": "$score_value"},
-            "model_used": {"$first": "$model_used"},
-            "explanation": {"$first": "$explanation"},
-            "created_at": {"$first": "$created_at"},
+            "score_value":  {"$first": "$score_value"},
+            "model_used":   {"$first": "$model_used"},
+            "explanation":  {"$first": "$explanation"},
+            "eligibility":  {"$first": "$eligibility"},
+            "months_count": {"$first": "$months_count"},
+            "version":      {"$first": "$version"},
+            "created_at":   {"$first": "$created_at"},
         }},
-        {"$project": {"_id": 0, "user_email": "$_id", "score_value": 1, "model_used": 1, "explanation": 1, "created_at": 1}},
+        {"$project": {
+            "_id": 0,
+            "user_email":   "$_id",
+            "score_value":  1,
+            "model_used":   1,
+            "explanation":  1,
+            "eligibility":  1,
+            "months_count": 1,
+            "version":      1,
+            "created_at":   1,
+        }},
     ]
     scores = list(scores_col.aggregate(pipeline))
     return {"scores": scores}

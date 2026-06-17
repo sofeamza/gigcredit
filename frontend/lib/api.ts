@@ -24,8 +24,8 @@ export const loginUser = (email: string, password: string) => {
   return api.post("/auth/login", { email, password })
 }
 
-export const calculateScore = (data: any) => {
-  return api.post("/score/calculate", data)
+export const calculateScore = () => {
+  return api.post("/score/calculate")
 }
 
 export const getScoreHistory = () => {

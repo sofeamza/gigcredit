@@ -12,7 +12,16 @@ interface WorkerScore {
   score_value: number
   model_used: string
   explanation: string[]
+  eligibility: "insufficient" | "preliminary" | "official" | null
+  months_count: number
+  version: number
   created_at: string
+}
+
+const ELIGIBILITY_CONFIG = {
+  official:     { label: "Official",     className: "bg-success/10 text-success" },
+  preliminary:  { label: "Preliminary",  className: "bg-warning/10 text-warning" },
+  insufficient: { label: "Insufficient", className: "bg-destructive/10 text-destructive" },
 }
 
 interface ShapFactor {
@@ -161,7 +170,7 @@ export default function FIDashboardPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {["Worker", "Score", "Category", "Model", "Last Updated", ""].map((h) => (
+                  {["Worker", "Score", "Category", "Score Status", "Data", "Version", "Last Updated", ""].map((h) => (
                     <th key={h} className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -196,8 +205,18 @@ export default function FIDashboardPage() {
                           {scoreCategory(s.score_value).label}
                         </Badge>
                       </td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground capitalize">
-                        {s.model_used}
+                      <td className="px-5 py-3.5">
+                        {s.eligibility && ELIGIBILITY_CONFIG[s.eligibility] ? (
+                          <Badge variant="secondary" className={cn("text-xs border-0 whitespace-nowrap", ELIGIBILITY_CONFIG[s.eligibility].className)}>
+                            {ELIGIBILITY_CONFIG[s.eligibility].label}
+                          </Badge>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {s.months_count ?? "—"} mo.
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {s.version ? `v${s.version}` : "—"}
                       </td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
                         {new Date(s.created_at).toLocaleDateString("en-MY", {
@@ -213,7 +232,7 @@ export default function FIDashboardPage() {
 
                     {expanded === s.user_email && (
                       <tr key={`${s.user_email}-exp`} className="border-b border-border bg-muted/20">
-                        <td colSpan={6} className="px-5 py-5">
+                        <td colSpan={8} className="px-5 py-5">
                           <div className="flex items-center justify-between mb-4">
                             <p className="text-xs font-semibold text-card-foreground uppercase tracking-wider">
                               SHAP Score Breakdown
@@ -231,7 +250,7 @@ export default function FIDashboardPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">
                       No worker profiles found.
                     </td>
                   </tr>

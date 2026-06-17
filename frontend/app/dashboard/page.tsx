@@ -21,6 +21,9 @@ export default function DashboardPage() {
   const [profileUser, setProfileUser] = useState<any>(null)
   const [factors, setFactors] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
+  const [eligibility, setEligibility] = useState<"insufficient" | "preliminary" | "official" | null>(null)
+  const [monthsCount, setMonthsCount] = useState(0)
+  const [scoreVersion, setScoreVersion] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -34,10 +37,16 @@ export default function DashboardPage() {
           id: profile.user_id,
           email: userRes.data.email,
           platform: profile.platform_name,
+          monthsCount: profile.months_count,
+          eligibility: profile.eligibility,
         })
 
-        const scoreRes = await calculateScore(profile)
+        const scoreRes = await calculateScore()
         const historyRes = await getScoreHistory()
+
+        setEligibility(scoreRes.data.eligibility)
+        setMonthsCount(scoreRes.data.months_count)
+        setScoreVersion(scoreRes.data.version)
 
         const latestScore = {
           ...mockCreditScore,
@@ -163,10 +172,8 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 max-w-3xl mx-auto">
-        <h1 className="text-xl font-semibold text-foreground mb-2">
-          Dashboard unavailable
-        </h1>
+      <div className="rounded-xl border border-border bg-card p-6 max-w-3xl mx-auto space-y-3">
+        <h1 className="text-xl font-semibold text-foreground">Dashboard unavailable</h1>
         <p className="text-sm text-muted-foreground">{error}</p>
       </div>
     )
@@ -175,12 +182,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Your credit score overview and factor breakdown
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1">Your credit score overview and factor breakdown</p>
       </div>
 
       <div data-tour="dashboard-score" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -191,7 +194,12 @@ export default function DashboardPage() {
               previousScore={score.previousValue}
               size="lg"
             />
-            <ScoreInsights score={score} />
+            <ScoreInsights
+              score={score}
+              eligibility={eligibility}
+              monthsCount={monthsCount}
+              scoreVersion={scoreVersion}
+            />
           </div>
         </div>
 

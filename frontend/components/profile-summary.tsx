@@ -1,10 +1,13 @@
-import { Briefcase, Mail, IdCard } from "lucide-react"
+import { Briefcase, Mail, IdCard, CalendarDays } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { CreditScore } from "@/lib/mock-data"
 
 interface ProfileUser {
   id: string
   email: string
   platform: string
+  monthsCount?: number
+  eligibility?: "insufficient" | "preliminary" | "official"
 }
 
 interface ProfileSummaryProps {
@@ -44,7 +47,24 @@ export function ProfileSummary({ user, score }: ProfileSummaryProps) {
           <IdCard className="w-4 h-4 text-muted-foreground shrink-0" />
           <span className="text-muted-foreground">Worker ID: {user?.id ?? "—"}</span>
         </div>
+        <div className="flex items-center gap-3 text-sm">
+          <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">{user?.monthsCount ?? 0} month{user?.monthsCount !== 1 ? "s" : ""} of data</span>
+        </div>
       </div>
+
+      {user?.eligibility && (
+        <div className={cn(
+          "rounded-lg px-3 py-2 text-xs font-medium",
+          user.eligibility === "official"     && "bg-success/10 text-success",
+          user.eligibility === "preliminary"  && "bg-warning/10 text-warning",
+          user.eligibility === "insufficient" && "bg-destructive/10 text-destructive",
+        )}>
+          {user.eligibility === "official"     && "✓ Official GigCredit Score"}
+          {user.eligibility === "preliminary"  && "⚠ Preliminary Score — upload more data"}
+          {user.eligibility === "insufficient" && "✗ Insufficient data — need 3+ months"}
+        </div>
+      )}
 
       <div className="pt-3 border-t border-border">
         <div className="flex items-center justify-between text-sm">
