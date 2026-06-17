@@ -8,6 +8,13 @@ import { ProfileSummary } from "@/components/profile-summary"
 import { ScoreInsights } from "@/components/score-insights"
 import { calculateScore, getScoreHistory, getMyProfile } from "@/lib/api"
 import { mockCreditScore, mockUser } from "@/lib/mock-data"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Info } from "lucide-react"
 
 export default function DashboardPage() {
   const [score, setScore] = useState<any>(mockCreditScore)
@@ -33,52 +40,86 @@ export default function DashboardPage() {
           modelUsed: scoreRes.data.model_used,
         }
 
+        const featureMeta = [
+          {
+            key: "task_completion_rate",
+            name: "Task Completion Rate",
+            weight: 0.4,
+            value: profile.task_completion_rate * 100,
+            normalizedValue: profile.task_completion_rate,
+            describe: (pos: boolean, pts: number) =>
+              pos
+                ? `You completed ${(profile.task_completion_rate * 100).toFixed(0)}% of your assigned tasks. This strong completion rate added ${pts} points to your score.`
+                : `Your task completion rate is ${(profile.task_completion_rate * 100).toFixed(0)}%. Completing more tasks consistently will help improve your score.`,
+            advise: (pos: boolean) =>
+              pos
+                ? "Keep accepting tasks you can reliably finish to maintain this score."
+                : "Try to complete at least 85% of accepted tasks each month.",
+          },
+          {
+            key: "gps_consistency",
+            name: "GPS Consistency",
+            weight: 0.3,
+            value: profile.gps_consistency * 100,
+            normalizedValue: profile.gps_consistency,
+            describe: (pos: boolean, pts: number) =>
+              pos
+                ? `Your GPS tracking shows ${(profile.gps_consistency * 100).toFixed(0)}% route consistency, adding ${pts} points. This signals reliability to lenders.`
+                : `Your GPS consistency is at ${(profile.gps_consistency * 100).toFixed(0)}%. Irregular routes can suggest instability in your work pattern.`,
+            advise: (pos: boolean) =>
+              pos
+                ? "Consistent routing shows you are a dependable worker — keep it up."
+                : "Ensure your GPS is active during deliveries and try to maintain regular routes.",
+          },
+          {
+            key: "customer_rating",
+            name: "Customer Rating",
+            weight: 0.2,
+            value: profile.customer_rating,
+            normalizedValue: profile.customer_rating / 5,
+            describe: (pos: boolean, pts: number) =>
+              pos
+                ? `Your average customer rating is ${profile.customer_rating.toFixed(1)}/5.0, contributing ${pts} points. High ratings reflect service quality.`
+                : `Your average customer rating is ${profile.customer_rating.toFixed(1)}/5.0. Low ratings reduce lender confidence in your work quality.`,
+            advise: (pos: boolean) =>
+              pos
+                ? "Great service earns great ratings — maintain prompt and friendly delivery."
+                : "Focus on timely deliveries and polite communication to improve ratings.",
+          },
+          {
+            key: "platform_diversity",
+            name: "Platform Diversity",
+            weight: 0.1,
+            value: profile.platform_diversity,
+            normalizedValue: profile.platform_diversity / 4,
+            describe: (pos: boolean, pts: number) =>
+              pos
+                ? `You work across ${profile.platform_diversity} platform${profile.platform_diversity !== 1 ? "s" : ""}, adding ${pts} points. Diversified income sources reduce financial risk.`
+                : `You are currently active on ${profile.platform_diversity} platform. Using more gig platforms shows income diversification.`,
+            advise: (pos: boolean) =>
+              pos
+                ? "Working across multiple platforms shows income resilience — keep diversifying."
+                : "Consider signing up to additional gig platforms like Grab, Lalamove, or FoodPanda.",
+          },
+        ]
+
         const factorData = scoreRes.data.explanation.map(
           (text: string, index: number) => {
-            const featureNames = [
-              "Task Completion Rate",
-              "GPS Consistency",
-              "Customer Rating",
-              "Platform Diversity",
-            ]
-
-            const keys = [
-              "task_completion_rate",
-              "gps_consistency",
-              "customer_rating",
-              "platform_diversity",
-            ]
-
-            const weights = [0.4, 0.3, 0.2, 0.1]
-
-            const values = [
-              profile.task_completion_rate * 100,
-              profile.gps_consistency * 100,
-              profile.customer_rating,
-              profile.platform_diversity,
-            ]
-
+            const meta = featureMeta[index]
             const match = text.match(/by ([\d.]+) points/)
             const shapValue = match ? Number(match[1]) : 0
             const isNegative = text.includes("decreased")
 
             return {
-              key: keys[index],
-              name: featureNames[index],
+              key: meta.key,
+              name: meta.name,
               impact: isNegative ? "negative" : "positive",
-              normalizedValue:
-                keys[index] === "customer_rating"
-                  ? profile.customer_rating / 5
-                  : keys[index] === "platform_diversity"
-                  ? profile.platform_diversity / 4
-                  : values[index] / 100,
+              normalizedValue: meta.normalizedValue,
               shapValue: isNegative ? -shapValue : shapValue,
-              description: text,
-              advice: isNegative
-                ? "Improving this factor may help increase your score."
-                : "This factor is currently supporting your score.",
-              weight: weights[index],
-              value: values[index],
+              description: meta.describe(!isNegative, shapValue),
+              advice: meta.advise(!isNegative),
+              weight: meta.weight,
+              value: meta.value,
             }
           }
         )
@@ -159,11 +200,26 @@ export default function DashboardPage() {
 
       <div>
         <div data-tour="score-factors" className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">
-            Score Factors (SHAP Breakdown)
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">
+              Score Factors
+            </h2>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="font-medium mb-1">How is this calculated?</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Each factor's impact is measured using SHAP (SHapley Additive exPlanations) — a method that shows exactly how much each part of your work history pushed your score up or down. Think of it as a breakdown of what's helping you and what's holding you back.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            See exactly how each factor contributes to your credit score
+            See what's helping and what's holding back your credit score
           </p>
         </div>
 

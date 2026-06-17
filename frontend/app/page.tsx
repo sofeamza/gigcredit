@@ -16,6 +16,7 @@ import {
   Shield,
   BarChart3,
   Lightbulb,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,9 +31,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
+  const [authError, setAuthError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setAuthError("")
     setLoading(true)
 
     try {
@@ -54,7 +57,7 @@ export default function LoginPage() {
       }
 
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Authentication failed")
+      setAuthError(error.response?.data?.detail || "Authentication failed. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -211,6 +214,13 @@ export default function LoginPage() {
               </div>
             )}
 
+            {authError && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{authError}</p>
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full"
@@ -234,7 +244,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => { setIsLogin(!isLogin); setAuthError("") }}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               {isLogin
