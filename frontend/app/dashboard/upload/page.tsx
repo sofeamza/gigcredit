@@ -10,9 +10,12 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Table2,
+  History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 interface UploadedFile {
   id: string
@@ -20,6 +23,7 @@ interface UploadedFile {
   size: number
   status: "uploading" | "success" | "error" | "mapping"
   progress: number
+  errorMessage?: string
 }
 
 function formatSize(bytes: number) {
@@ -85,6 +89,19 @@ const REQUIREMENTS = [
   { emoji: "💰", label: "Valid earnings recorded for that month" },
 ]
 
+const CSV_COLUMNS = [
+  { name: "worker_id", type: "Text", description: "Your unique worker/driver ID from the platform", example: "GRB-001234" },
+  { name: "platform", type: "Text", description: "Name of the gig platform", example: "Grab" },
+  { name: "month", type: "Text", description: "Month the data is for (YYYY-MM format)", example: "2024-03" },
+  { name: "total_tasks_assigned", type: "Number", description: "Total jobs or deliveries assigned to you that month", example: "87" },
+  { name: "tasks_completed", type: "Number", description: "How many of those jobs you successfully completed", example: "82" },
+  { name: "cancellation_rate", type: "Decimal (0–1)", description: "Proportion of jobs you cancelled (0.05 = 5%)", example: "0.05" },
+  { name: "avg_rating", type: "Decimal (1–5)", description: "Average customer rating for the month", example: "4.7" },
+  { name: "active_days", type: "Number", description: "Number of days you worked that month", example: "22" },
+  { name: "gps_consistency", type: "Decimal (0–1)", description: "GPS/route consistency score from the platform", example: "0.91" },
+  { name: "total_earnings", type: "Number", description: "Total earnings that month (in your local currency)", example: "3200.50" },
+]
+
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -95,6 +112,7 @@ export default function UploadPage() {
   const [manualMapping, setManualMapping] = useState<Record<string, string>>({})
   const [validationResults, setValidationResults] = useState<any[]>([])
   const [showHowItWorks, setShowHowItWorks] = useState(true)
+  const [showCsvDocs, setShowCsvDocs] = useState(false)
 
   const uploadFile = useCallback(async (file: File) => {
     const uploadedFile: UploadedFile = {
@@ -128,14 +146,42 @@ export default function UploadPage() {
         setValidationResults(res.data.validation_results)
       }
 
+      if (res.data.status === "validation_failed") {
+        setFiles((prev) => prev.map((f) =>
+          f.id === uploadedFile.id
+            ? { ...f, progress: 100, status: "error", errorMessage: "No months passed validation. Check the results below for details." }
+            : f
+        ))
+        return
+      }
+
       localStorage.setItem("gigcredit_uploaded", "true")
       setFiles((prev) => prev.map((f) =>
         f.id === uploadedFile.id
           ? { ...f, progress: 100, status: res.data.records_inserted > 0 ? "success" : "error" }
           : f
       ))
-    } catch {
-      setFiles((prev) => prev.map((f) => f.id === uploadedFile.id ? { ...f, status: "error", progress: 100 } : f))
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      let errorMessage = "Upload failed. Please check the file and try again."
+
+      if (typeof detail === "string") {
+        if (detail.includes("multiple worker IDs")) {
+          errorMessage = "Your file contains data for more than one worker ID. Each file must contain data for a single worker only."
+        } else if (detail.includes("Unsupported file")) {
+          errorMessage = "Unsupported file type. Please upload a CSV (.csv), Excel (.xlsx), or JSON (.json) file."
+        } else if (detail.includes("Invalid file")) {
+          errorMessage = "The file could not be read. Make sure it's a valid CSV or Excel file and not corrupted."
+        } else {
+          errorMessage = detail
+        }
+      }
+
+      setFiles((prev) => prev.map((f) =>
+        f.id === uploadedFile.id
+          ? { ...f, status: "error", progress: 100, errorMessage }
+          : f
+      ))
     }
   }, [])
 
@@ -163,11 +209,19 @@ export default function UploadPage() {
     <div className="space-y-6 max-w-3xl mx-auto">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Upload Your Work Data</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Share your gig work history so we can build your credit score
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Upload Your Work Data</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Share your gig work history so we can build your credit score
+          </p>
+        </div>
+        <Link href="/dashboard/upload/history">
+          <Button variant="outline" size="sm" className="gap-2 shrink-0">
+            <History className="w-4 h-4" />
+            Upload History
+          </Button>
+        </Link>
       </div>
 
       {/* How it works — collapsible */}
@@ -201,6 +255,66 @@ export default function UploadPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* CSV format documentation — collapsible */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowCsvDocs((v) => !v)}
+          className="flex items-center justify-between w-full px-5 py-4 text-left"
+        >
+          <div className="flex items-center gap-2.5">
+            <Table2 className="w-4 h-4 text-primary shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-card-foreground">File format reference</p>
+              <p className="text-xs text-muted-foreground mt-0.5">What columns your CSV needs and what they mean</p>
+            </div>
+          </div>
+          {showCsvDocs
+            ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+            : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+        </button>
+
+        {showCsvDocs && (
+          <div className="border-t border-border px-5 py-5 space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Your file needs these columns. Column names don't have to be exact — we'll try to match them automatically.
+              If we can't match a column, we'll ask you to map it manually.
+            </p>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Column name</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Description</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Example</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {CSV_COLUMNS.map((col) => (
+                    <tr key={col.name} className="hover:bg-muted/30">
+                      <td className="px-4 py-2.5 font-mono text-primary font-medium whitespace-nowrap">{col.name}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{col.type}</td>
+                      <td className="px-4 py-2.5 text-card-foreground leading-relaxed">{col.description}</td>
+                      <td className="px-4 py-2.5 font-mono text-muted-foreground whitespace-nowrap">{col.example}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="rounded-lg bg-muted/50 border border-border p-3.5 space-y-1.5">
+              <p className="text-xs font-medium text-card-foreground">Tips</p>
+              <p className="text-xs text-muted-foreground">• Each row in your file = one month of data on one platform</p>
+              <p className="text-xs text-muted-foreground">• All rows must have the same <span className="font-mono text-primary">worker_id</span> — your file should only contain your own data</p>
+              <p className="text-xs text-muted-foreground">• The <span className="font-mono text-primary">month</span> column should be in YYYY-MM format (e.g. 2024-03 for March 2024)</p>
+              <p className="text-xs text-muted-foreground">• Uploading the same month again will update that month's data, not create a duplicate</p>
+            </div>
           </div>
         )}
       </div>
@@ -382,47 +496,58 @@ export default function UploadPage() {
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map((file) => (
-            <div key={file.id} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card">
-              <div className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-lg shrink-0",
-                file.status === "success" ? "bg-success/10"
-                : file.status === "error"   ? "bg-destructive/10"
-                : file.status === "mapping" ? "bg-warning/10"
-                : "bg-muted"
-              )}>
-                {file.status === "success" ? <CheckCircle2 className="w-5 h-5 text-success" />
-                : file.status === "error"   ? <AlertCircle className="w-5 h-5 text-destructive" />
-                : file.status === "mapping" ? <AlertCircle className="w-5 h-5 text-warning-foreground" />
-                : <FileText className="w-5 h-5 text-muted-foreground" />}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-card-foreground truncate">{file.name}</p>
-                  <span className="text-xs text-muted-foreground shrink-0">{formatSize(file.size)}</span>
+            <div key={file.id} className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 p-3">
+                <div className={cn(
+                  "flex items-center justify-center w-10 h-10 rounded-lg shrink-0",
+                  file.status === "success" ? "bg-success/10"
+                  : file.status === "error"   ? "bg-destructive/10"
+                  : file.status === "mapping" ? "bg-warning/10"
+                  : "bg-muted"
+                )}>
+                  {file.status === "success" ? <CheckCircle2 className="w-5 h-5 text-success" />
+                  : file.status === "error"   ? <AlertCircle className="w-5 h-5 text-destructive" />
+                  : file.status === "mapping" ? <AlertCircle className="w-5 h-5 text-warning-foreground" />
+                  : <FileText className="w-5 h-5 text-muted-foreground" />}
                 </div>
 
-                {file.status === "uploading" && (
-                  <div className="mt-2">
-                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${file.progress}%` }} />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">Uploading...</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-card-foreground truncate">{file.name}</p>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatSize(file.size)}</span>
                   </div>
-                )}
-                {file.status === "success" && <p className="text-xs text-success mt-0.5">File uploaded successfully</p>}
-                {file.status === "mapping" && <p className="text-xs text-warning-foreground mt-0.5">We need help matching some columns — see above</p>}
-                {file.status === "error"   && <p className="text-xs text-destructive mt-0.5">Upload failed — please check the file and try again</p>}
+
+                  {file.status === "uploading" && (
+                    <div className="mt-2">
+                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${file.progress}%` }} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Uploading...</p>
+                    </div>
+                  )}
+                  {file.status === "success" && <p className="text-xs text-success mt-0.5">File uploaded successfully</p>}
+                  {file.status === "mapping" && <p className="text-xs text-warning-foreground mt-0.5">We need help matching some columns — see above</p>}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setFiles((prev) => prev.filter((f) => f.id !== file.id))}
-                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                aria-label={`Remove ${file.name}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Error message banner */}
+              {file.status === "error" && (
+                <div className="flex items-start gap-2.5 px-4 py-3 bg-destructive/5 border-t border-destructive/20">
+                  <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-xs text-destructive leading-relaxed">
+                    {file.errorMessage ?? "Upload failed. Please check the file and try again."}
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -43,6 +43,10 @@ export const getMyProfile = () => {
   return api.get("/data/my-profile")
 }
 
+export const getUploadHistory = () => api.get("/data/upload-history")
+
+export const deleteUploadBatch = (batchId: string) => api.delete(`/data/upload-history/${batchId}`)
+
 export const runSimulation = (data: any) => {
   return api.post("/simulate", data)
 }

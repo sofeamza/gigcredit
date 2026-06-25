@@ -62,7 +62,7 @@ export function FactorCard({ factor }: FactorCardProps) {
               className={cn(
                 "inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full",
                 isPositive
-                  ? "bg-success/10 text-success"
+                  ? "bg-primary/10 text-primary"
                   : "bg-destructive/10 text-destructive"
               )}
             >
@@ -90,7 +90,7 @@ export function FactorCard({ factor }: FactorCardProps) {
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-700",
-                isPositive ? "bg-success" : "bg-destructive"
+                isPositive ? "bg-primary" : "bg-destructive"
               )}
               style={{ width: `${barWidth}%` }}
             />

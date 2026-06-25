@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search, ShieldCheck } from "lucide-react"
+import { Search, ShieldCheck, Download } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getWorkerScores, logFIAccess } from "@/lib/api"
 
@@ -103,6 +104,49 @@ export default function FIDashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const downloadPDF = async () => {
+    const { jsPDF } = await import("jspdf")
+    const autoTable = (await import("jspdf-autotable")).default
+
+    const doc = new jsPDF({ orientation: "landscape" })
+
+    doc.setFontSize(16)
+    doc.setFont("helvetica", "bold")
+    doc.text("GigCredit — Worker Credit Score Report", 14, 18)
+
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(100)
+    doc.text(`Generated: ${new Date().toLocaleString("en-MY")}  ·  Confidential — For authorised financial institution use only`, 14, 25)
+    doc.setTextColor(0)
+
+    const rows = scores.map((s) => [
+      s.user_email,
+      String(s.score_value),
+      s.score_value >= 700 ? "Good" : s.score_value >= 580 ? "Fair" : "Poor",
+      s.eligibility
+        ? s.eligibility.charAt(0).toUpperCase() + s.eligibility.slice(1)
+        : "—",
+      s.months_count != null ? `${s.months_count} mo.` : "—",
+      s.version ? `v${s.version}` : "—",
+      s.model_used ?? "—",
+      s.created_at
+        ? new Date(s.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
+        : "—",
+    ])
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["Worker", "Score", "Category", "Score Status", "Data", "Version", "Model", "Last Updated"]],
+      body: rows,
+      styles: { fontSize: 8.5, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [245, 248, 255] },
+    })
+
+    doc.save(`gigcredit-worker-scores-${new Date().toISOString().slice(0, 10)}.pdf`)
+  }
+
   const filtered = scores.filter((s) =>
     s.user_email.toLowerCase().includes(search.toLowerCase())
   )
@@ -114,13 +158,25 @@ export default function FIDashboardPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Credit Profiles
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Read-only view of worker credit scores and SHAP explanations
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Credit Profiles
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Read-only view of worker credit scores and SHAP explanations
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 shrink-0"
+          onClick={downloadPDF}
+          disabled={scores.length === 0}
+        >
+          <Download className="w-4 h-4" />
+          Download PDF
+        </Button>
       </div>
 
       {/* Access notice */}

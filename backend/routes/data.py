@@ -1,16 +1,17 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 import pandas as pd
 import io
+import uuid
 
 from services.auth_service import get_current_user
-from config import profiles_col
+from config import profiles_col, upload_batches_col
 from services.column_mapper import REQUIRED_COLUMNS, auto_map_columns, apply_column_mapping
 from datetime import datetime
 
 router = APIRouter(prefix="/data", tags=["Data"])
 
-MIN_ACTIVE_DAYS   = 10
-MIN_TASKS         = 30
+MIN_ACTIVE_DAYS = 10
+MIN_TASKS       = 30
 
 
 @router.post("/upload")
@@ -50,7 +51,16 @@ async def upload_data(
 
     df = apply_column_mapping(df, mapping)
 
+    unique_worker_ids = df["worker_id"].astype(str).str.strip().unique()
+    if len(unique_worker_ids) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your file contains multiple worker IDs ({', '.join(unique_worker_ids)}). Each file must contain data for a single worker only.",
+        )
+
+    batch_id = str(uuid.uuid4())
     validation_results = []
+    inserted_months = []
     inserted = 0
     failed   = 0
 
@@ -62,7 +72,6 @@ async def upload_data(
         active_days    = int(row.get("active_days", 0))
         total_earnings = float(row["total_earnings"])
 
-        # ── Validation ───────────────────────────────────────────────────────
         reasons = []
         if active_days < MIN_ACTIVE_DAYS:
             reasons.append(f"Only {active_days} active days (minimum {MIN_ACTIVE_DAYS})")
@@ -83,7 +92,6 @@ async def upload_data(
             failed += 1
             continue
 
-        # ── Build profile doc ─────────────────────────────────────────────────
         profile_doc = {
             "user_email":           current_user["email"],
             "worker_id":            str(row["worker_id"]),
@@ -97,9 +105,9 @@ async def upload_data(
             "tasks_completed":      tasks_done,
             "active_days":          active_days,
             "uploaded_at":          datetime.utcnow(),
+            "batch_id":             batch_id,
         }
 
-        # Upsert: same user + month + platform replaces previous upload
         profiles_col.update_one(
             {
                 "user_email":    current_user["email"],
@@ -110,6 +118,7 @@ async def upload_data(
             upsert=True,
         )
 
+        inserted_months.append({"month": month, "platform": platform})
         validation_results.append({
             "month":    month,
             "platform": platform,
@@ -126,6 +135,16 @@ async def upload_data(
             "validation_results": validation_results,
         }
 
+    upload_batches_col.insert_one({
+        "batch_id":    batch_id,
+        "user_email":  current_user["email"],
+        "filename":    file.filename,
+        "uploaded_at": datetime.utcnow(),
+        "months":      inserted_months,
+        "records_inserted": inserted,
+        "records_failed":   failed,
+    })
+
     return {
         "status":             "success",
         "message":            f"{inserted} month(s) of data uploaded successfully.",
@@ -133,6 +152,33 @@ async def upload_data(
         "records_failed":     failed,
         "validation_results": validation_results,
     }
+
+
+@router.get("/upload-history")
+def get_upload_history(current_user: dict = Depends(get_current_user)):
+    batches = list(upload_batches_col.find(
+        {"user_email": current_user["email"]},
+        {"_id": 0},
+    ).sort("uploaded_at", -1))
+    return {"batches": batches}
+
+
+@router.delete("/upload-history/{batch_id}")
+def delete_upload_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
+    batch = upload_batches_col.find_one({
+        "batch_id":   batch_id,
+        "user_email": current_user["email"],
+    })
+    if not batch:
+        raise HTTPException(status_code=404, detail="Upload batch not found")
+
+    profiles_col.delete_many({
+        "user_email": current_user["email"],
+        "batch_id":   batch_id,
+    })
+    upload_batches_col.delete_one({"batch_id": batch_id})
+
+    return {"status": "deleted", "batch_id": batch_id}
 
 
 @router.get("/my-profile")
@@ -145,7 +191,6 @@ def get_my_profile(current_user: dict = Depends(get_current_user)):
     if not profiles:
         raise HTTPException(status_code=404, detail="No uploaded profile found")
 
-    # Aggregate by month
     from collections import defaultdict
     monthly: dict = defaultdict(list)
     for p in profiles:
@@ -160,7 +205,6 @@ def get_my_profile(current_user: dict = Depends(get_current_user)):
     else:
         eligibility = "official"
 
-    # Most recent month for display fields
     latest = profiles[0]
 
     return {

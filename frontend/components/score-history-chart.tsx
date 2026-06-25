@@ -49,12 +49,12 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
             <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
               <stop
                 offset="0%"
-                stopColor="hsl(162, 63%, 41%)"
-                stopOpacity={0.3}
+                stopColor="hsl(221, 83%, 53%)"
+                stopOpacity={0.25}
               />
               <stop
                 offset="100%"
-                stopColor="hsl(162, 63%, 41%)"
+                stopColor="hsl(221, 83%, 53%)"
                 stopOpacity={0.02}
               />
             </linearGradient>
@@ -81,11 +81,11 @@ export function ScoreHistoryChart({ data }: ScoreHistoryChartProps) {
           <Area
             type="monotone"
             dataKey="score"
-            stroke="hsl(162, 63%, 41%)"
+            stroke="hsl(221, 83%, 53%)"
             strokeWidth={2.5}
             fill="url(#scoreGradient)"
-            dot={{ r: 4, fill: "hsl(162, 63%, 41%)", strokeWidth: 2, stroke: "hsl(0, 0%, 100%)" }}
-            activeDot={{ r: 6, fill: "hsl(162, 63%, 41%)", strokeWidth: 2, stroke: "hsl(0, 0%, 100%)" }}
+            dot={{ r: 4, fill: "hsl(221, 83%, 53%)", strokeWidth: 2, stroke: "hsl(0, 0%, 100%)" }}
+            activeDot={{ r: 6, fill: "hsl(221, 83%, 53%)", strokeWidth: 2, stroke: "hsl(0, 0%, 100%)" }}
           />
         </AreaChart>
       </ResponsiveContainer>

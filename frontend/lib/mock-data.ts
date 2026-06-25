@@ -304,8 +304,8 @@ export function getScoreCategory(
 export function getScoreColor(score: number): string {
   if (score < 500) return "hsl(0, 72%, 51%)"
   if (score < 670) return "hsl(43, 96%, 56%)"
-  if (score < 800) return "hsl(162, 63%, 41%)"
-  return "hsl(142, 71%, 45%)"
+  if (score < 800) return "hsl(221, 83%, 53%)"
+  return "hsl(221, 83%, 45%)"
 }
 
 export function getScoreColorClass(score: number): string {
