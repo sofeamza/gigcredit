@@ -41,12 +41,16 @@ def get_admin_stats(admin: dict = Depends(require_admin)):
     total_profiles = profiles_col.count_documents({})
     total_scores = scores_col.count_documents({})
 
-    scores = list(scores_col.find({}, {"_id": 0, "score_value": 1}))
+    # One entry per user — latest score only
+    latest_scores = list(scores_col.aggregate([
+        {"$sort": {"data_period": -1}},
+        {"$group": {"_id": "$user_email", "score_value": {"$first": "$score_value"}}},
+    ]))
 
-    avg_score = round(sum(s["score_value"] for s in scores) / len(scores)) if scores else 0
-    poor = sum(1 for s in scores if s["score_value"] < 580)
-    fair = sum(1 for s in scores if 580 <= s["score_value"] < 700)
-    good = sum(1 for s in scores if s["score_value"] >= 700)
+    avg_score = round(sum(s["score_value"] for s in latest_scores) / len(latest_scores)) if latest_scores else 0
+    poor = sum(1 for s in latest_scores if s["score_value"] < 580)
+    fair = sum(1 for s in latest_scores if 580 <= s["score_value"] < 700)
+    good = sum(1 for s in latest_scores if s["score_value"] >= 700)
 
     return {
         "total_users": total_users,
@@ -63,7 +67,7 @@ def get_admin_stats(admin: dict = Depends(require_admin)):
 
 @router.get("/users")
 def get_users(admin: dict = Depends(require_admin)):
-    users = list(users_col.find({}, {"_id": 0, "email": 1, "role": 1}))
+    users = list(users_col.find({}, {"_id": 0, "email": 1, "role": 1, "created_at": 1}))
     return {"users": users}
 
 
@@ -108,7 +112,8 @@ def create_financial_institution(req: CreateFIRequest, admin: dict = Depends(req
 def get_financial_institutions(admin: dict = Depends(require_admin)):
     institutions = list(users_col.find(
         {"role": "financial_institution"},
-        {"_id": 0, "email": 1, "institution_name": 1, "fi_status": 1, "created_at": 1},
+        {"_id": 0, "email": 1, "institution_name": 1, "fi_status": 1, "created_at": 1,
+         "suspend_count": 1, "reactivate_count": 1},
     ))
 
     for inst in institutions:
@@ -132,12 +137,29 @@ def get_financial_institutions(admin: dict = Depends(require_admin)):
 
 @router.patch("/financial-institutions/{email}/status")
 def update_fi_status(email: str, req: UpdateFIStatusRequest, admin: dict = Depends(require_admin)):
-    result = users_col.update_one(
-        {"email": email, "role": "financial_institution"},
-        {"$set": {"fi_status": req.status}},
-    )
-    if result.matched_count == 0:
+    fi = users_col.find_one({"email": email, "role": "financial_institution"})
+    if not fi:
         raise HTTPException(status_code=404, detail="Financial institution not found")
+
+    suspend_count   = fi.get("suspend_count", 0)
+    reactivate_count = fi.get("reactivate_count", 0)
+
+    if req.status == "suspended" and suspend_count >= 2:
+        raise HTTPException(status_code=400, detail="This institution has reached the maximum of 2 suspensions.")
+    if req.status == "active" and reactivate_count >= 1:
+        raise HTTPException(status_code=400, detail="This institution can only be reactivated once.")
+
+    update: dict = {"fi_status": req.status}
+    inc: dict = {}
+    if req.status == "suspended":
+        inc["suspend_count"] = 1
+    else:
+        inc["reactivate_count"] = 1
+
+    users_col.update_one(
+        {"email": email},
+        {"$set": update, "$inc": inc},
+    )
     return {"message": f"Status updated to {req.status}"}
 
 
@@ -176,7 +198,7 @@ def log_fi_access(req: LogFIAccessRequest, current_user: dict = Depends(require_
 @router.get("/worker-scores")
 def get_worker_scores(current_user: dict = Depends(require_admin_or_fi)):
     pipeline = [
-        {"$sort": {"created_at": -1}},
+        {"$sort": {"data_period": -1}},
         {"$group": {
             "_id": "$user_email",
             "score_value":  {"$first": "$score_value"},
@@ -207,11 +229,14 @@ def get_worker_scores(current_user: dict = Depends(require_admin_or_fi)):
 def get_view_stats(current_user: dict = Depends(require_admin_or_fi)):
     total_profiles = profiles_col.count_documents({})
     total_scores = scores_col.count_documents({})
-    scores = list(scores_col.find({}, {"_id": 0, "score_value": 1}))
-    avg_score = round(sum(s["score_value"] for s in scores) / len(scores)) if scores else 0
-    poor = sum(1 for s in scores if s["score_value"] < 580)
-    fair = sum(1 for s in scores if 580 <= s["score_value"] < 700)
-    good = sum(1 for s in scores if s["score_value"] >= 700)
+    latest_scores = list(scores_col.aggregate([
+        {"$sort": {"created_at": -1}},
+        {"$group": {"_id": "$user_email", "score_value": {"$first": "$score_value"}}},
+    ]))
+    avg_score = round(sum(s["score_value"] for s in latest_scores) / len(latest_scores)) if latest_scores else 0
+    poor = sum(1 for s in latest_scores if s["score_value"] < 580)
+    fair = sum(1 for s in latest_scores if 580 <= s["score_value"] < 700)
+    good = sum(1 for s in latest_scores if s["score_value"] >= 700)
 
     return {
         "total_profiles": total_profiles,

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from config import users_col
 from services.auth_service import hash_password, verify_password, create_token
+from datetime import datetime
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -26,7 +27,8 @@ def register(req: RegisterRequest):
     users_col.insert_one({
         "email": req.email,
         "hashed_password": hashed,
-        "role": "worker"
+        "role": "worker",
+        "created_at": datetime.utcnow(),
     })
 
     token = create_token({"email": req.email})

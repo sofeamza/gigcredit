@@ -32,6 +32,10 @@ export const getScoreHistory = () => {
   return api.get("/score/history")
 }
 
+export const getDailyScores = (month: string) => {
+  return api.get(`/score/daily?month=${month}`)
+}
+
 export const uploadDataFile = (file: File) => {
   const formData = new FormData()
   formData.append("file", file)
@@ -46,6 +50,8 @@ export const getMyProfile = () => {
 export const getUploadHistory = () => api.get("/data/upload-history")
 
 export const deleteUploadBatch = (batchId: string) => api.delete(`/data/upload-history/${batchId}`)
+
+export const getWorkerHistory = (workerEmail: string) => api.get(`/data/worker-history/${encodeURIComponent(workerEmail)}`)
 
 export const runSimulation = (data: any) => {
   return api.post("/simulate", data)

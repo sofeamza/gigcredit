@@ -26,6 +26,13 @@ interface UploadedFile {
   errorMessage?: string
 }
 
+interface ResultsModal {
+  filename: string
+  passed: number
+  failed: number
+  results: any[]
+}
+
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -43,7 +50,7 @@ const HOW_IT_WORKS = [
     step: "2",
     emoji: "📤",
     title: "Upload the file here",
-    body: "Drag your file into the box below or click to browse. You can upload multiple months at once — the more data you provide, the more accurate your score will be.",
+    body: "Drag your file into the box below or click to browse. Your file should have one row per day. You can upload multiple months at once — the more data you provide, the more accurate your score will be.",
   },
   {
     step: "3",
@@ -87,20 +94,86 @@ const REQUIREMENTS = [
   { emoji: "📅", label: "At least 10 working days in the month" },
   { emoji: "✅", label: "At least 30 completed jobs or deliveries" },
   { emoji: "💰", label: "Valid earnings recorded for that month" },
+  { emoji: "🏷️", label: "A recognized platform name (e.g. Grab, FoodPanda, Lalamove)" },
+  { emoji: "🔢", label: "No blank or negative values in required columns" },
+  { emoji: "📏", label: "Ratings between 1–5 and hours online between 0–24" },
 ]
 
 const CSV_COLUMNS = [
-  { name: "worker_id", type: "Text", description: "Your unique worker/driver ID from the platform", example: "GRB-001234" },
-  { name: "platform", type: "Text", description: "Name of the gig platform", example: "Grab" },
-  { name: "month", type: "Text", description: "Month the data is for (YYYY-MM format)", example: "2024-03" },
-  { name: "total_tasks_assigned", type: "Number", description: "Total jobs or deliveries assigned to you that month", example: "87" },
-  { name: "tasks_completed", type: "Number", description: "How many of those jobs you successfully completed", example: "82" },
-  { name: "cancellation_rate", type: "Decimal (0–1)", description: "Proportion of jobs you cancelled (0.05 = 5%)", example: "0.05" },
-  { name: "avg_rating", type: "Decimal (1–5)", description: "Average customer rating for the month", example: "4.7" },
-  { name: "active_days", type: "Number", description: "Number of days you worked that month", example: "22" },
-  { name: "gps_consistency", type: "Decimal (0–1)", description: "GPS/route consistency score from the platform", example: "0.91" },
-  { name: "total_earnings", type: "Number", description: "Total earnings that month (in your local currency)", example: "3200.50" },
+  { name: "date", type: "Date", description: "The calendar date for this row (one row per day)", example: "2026-05-01" },
+  { name: "platform", type: "Text", description: "Name of the gig platform for that day", example: "Grab" },
+  { name: "jobs_completed", type: "Number", description: "Number of jobs or deliveries you completed that day", example: "12" },
+  { name: "jobs_cancelled", type: "Number", description: "Number of jobs you cancelled or rejected that day", example: "1" },
+  { name: "total_earnings", type: "Number", description: "Money you earned that day (in your local currency)", example: "185.50" },
+  { name: "hours_online", type: "Decimal", description: "How many hours you were logged in / online that day", example: "7.5" },
+  { name: "average_rating", type: "Decimal (1–5)", description: "Your average customer rating for that day (leave blank if no jobs)", example: "4.9" },
 ]
+
+function ResultsModal({ modal, onClose }: { modal: ResultsModal; onClose: () => void }) {
+  const allPassed = modal.failed === 0
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+
+      {/* Dialog */}
+      <div className="relative bg-card border border-border rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-border shrink-0">
+          <div className={cn(
+            "flex items-center justify-center w-10 h-10 rounded-full shrink-0",
+            allPassed ? "bg-success/10" : modal.passed > 0 ? "bg-warning/10" : "bg-destructive/10"
+          )}>
+            {allPassed
+              ? <CheckCircle2 className="w-5 h-5 text-success" />
+              : modal.passed > 0
+              ? <AlertCircle className="w-5 h-5 text-warning-foreground" />
+              : <AlertCircle className="w-5 h-5 text-destructive" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-card-foreground truncate">{modal.filename}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {modal.passed} month{modal.passed !== 1 ? "s" : ""} accepted
+              {modal.failed > 0 && ` · ${modal.failed} not accepted`}
+            </p>
+          </div>
+        </div>
+
+        {/* Results list */}
+        <div className="overflow-y-auto flex-1 divide-y divide-border">
+          {modal.results.map((r: any, i: number) => (
+            <div key={i} className="flex items-start gap-3 px-6 py-4">
+              {r.status === "passed"
+                ? <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                : <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-card-foreground">
+                  {r.month} — {r.platform}
+                </p>
+                {r.status === "passed" ? (
+                  <p className="text-xs text-success mt-0.5">Accepted and will count toward your score</p>
+                ) : (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-xs text-muted-foreground">Didn't qualify because:</p>
+                    {r.reasons.map((reason: string, j: number) => (
+                      <p key={j} className="text-xs text-destructive">• {reason}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-border shrink-0">
+          <Button className="w-full" onClick={onClose}>OK</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadedFile[]>([])
@@ -110,7 +183,7 @@ export default function UploadPage() {
   const [missingColumns, setMissingColumns] = useState<string[]>([])
   const [detectedMapping, setDetectedMapping] = useState<Record<string, string>>({})
   const [manualMapping, setManualMapping] = useState<Record<string, string>>({})
-  const [validationResults, setValidationResults] = useState<any[]>([])
+  const [resultsModal, setResultsModal] = useState<ResultsModal | null>(null)
   const [showHowItWorks, setShowHowItWorks] = useState(true)
   const [showCsvDocs, setShowCsvDocs] = useState(false)
 
@@ -126,7 +199,6 @@ export default function UploadPage() {
     setFiles((prev) => [uploadedFile, ...prev])
     setMappingRequired(false)
     setManualMapping({})
-    setValidationResults([])
 
     try {
       setFiles((prev) => prev.map((f) => f.id === uploadedFile.id ? { ...f, progress: 60 } : f))
@@ -142,14 +214,18 @@ export default function UploadPage() {
         return
       }
 
-      if (res.data.validation_results) {
-        setValidationResults(res.data.validation_results)
+      const validationResults: any[] = res.data.validation_results || []
+      const passed = validationResults.filter((r) => r.status === "passed").length
+      const failed = validationResults.filter((r) => r.status === "failed").length
+
+      if (validationResults.length > 0) {
+        setResultsModal({ filename: file.name, passed, failed, results: validationResults })
       }
 
       if (res.data.status === "validation_failed") {
         setFiles((prev) => prev.map((f) =>
           f.id === uploadedFile.id
-            ? { ...f, progress: 100, status: "error", errorMessage: "No months passed validation. Check the results below for details." }
+            ? { ...f, progress: 100, status: "error", errorMessage: "No months passed validation." }
             : f
         ))
         return
@@ -207,6 +283,11 @@ export default function UploadPage() {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
+
+      {/* Results modal */}
+      {resultsModal && (
+        <ResultsModal modal={resultsModal} onClose={() => setResultsModal(null)} />
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -282,7 +363,6 @@ export default function UploadPage() {
           <div className="border-t border-border px-5 py-5 space-y-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Your file needs these columns. Column names don't have to be exact — we'll try to match them automatically.
-              If we can't match a column, we'll ask you to map it manually.
             </p>
 
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -310,10 +390,11 @@ export default function UploadPage() {
 
             <div className="rounded-lg bg-muted/50 border border-border p-3.5 space-y-1.5">
               <p className="text-xs font-medium text-card-foreground">Tips</p>
-              <p className="text-xs text-muted-foreground">• Each row in your file = one month of data on one platform</p>
-              <p className="text-xs text-muted-foreground">• All rows must have the same <span className="font-mono text-primary">worker_id</span> — your file should only contain your own data</p>
-              <p className="text-xs text-muted-foreground">• The <span className="font-mono text-primary">month</span> column should be in YYYY-MM format (e.g. 2024-03 for March 2024)</p>
+              <p className="text-xs text-muted-foreground">• Each row = one day of activity on one platform</p>
+              <p className="text-xs text-muted-foreground">• Include all days in the month — days with no work (zeros) are fine and expected</p>
+              <p className="text-xs text-muted-foreground">• Column names don't have to be exact — we'll match them automatically</p>
               <p className="text-xs text-muted-foreground">• Uploading the same month again will update that month's data, not create a duplicate</p>
+              <p className="text-xs text-muted-foreground">• You can export multi-month files — each month is processed separately</p>
             </div>
           </div>
         )}
@@ -449,45 +530,6 @@ export default function UploadPage() {
               Confirm and continue
               <CheckCircle2 className="w-4 h-4 ml-2" />
             </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Validation results */}
-      {validationResults.length > 0 && (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <p className="text-sm font-semibold text-card-foreground">Upload Results</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {validationResults.filter(r => r.status === "passed").length} month(s) accepted ·{" "}
-              {validationResults.filter(r => r.status === "failed").length} month(s) not accepted
-            </p>
-          </div>
-          <div className="divide-y divide-border">
-            {validationResults.map((r, i) => (
-              <div key={i} className="flex items-start gap-3 px-5 py-4">
-                {r.status === "passed"
-                  ? <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  : <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-card-foreground">
-                    {r.month} — {r.platform}
-                  </p>
-                  {r.status === "passed" ? (
-                    <p className="text-xs text-success mt-0.5">
-                      ✓ This month's data was accepted and will count toward your score
-                    </p>
-                  ) : (
-                    <div className="mt-1 space-y-1">
-                      <p className="text-xs text-muted-foreground">This month didn't qualify because:</p>
-                      {r.reasons.map((reason: string, j: number) => (
-                        <p key={j} className="text-xs text-destructive">• {reason}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}

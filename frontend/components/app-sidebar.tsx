@@ -91,9 +91,7 @@ export function AppNavbar() {
       <div className="mx-auto flex h-14 items-center justify-between px-4 md:px-6 lg:px-8">
         {/* Logo */}
         <Link href={user?.role === "admin" ? "/dashboard/admin" : user?.role === "financial_institution" ? "/dashboard/fi" : "/dashboard"} className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-            <CreditCard className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="GigCredit" className="w-8 h-8 rounded-lg object-contain" />
           <div className="flex items-baseline gap-1.5">
             <span className="text-base font-semibold tracking-tight text-card-foreground">
               GigCredit
@@ -109,7 +107,7 @@ export function AppNavbar() {
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              (item.href !== "/dashboard" && item.href !== "/dashboard/admin" && pathname.startsWith(item.href))
             const isExactDashboard =
               item.href === "/dashboard" && pathname === "/dashboard"
             const active = isActive || isExactDashboard
@@ -143,7 +141,7 @@ export function AppNavbar() {
                 {userHandle}
               </span>
               <span className="text-xs text-muted-foreground leading-tight capitalize">
-                {user?.role ?? ""}
+                {user?.role ? user.role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : ""}
               </span>
             </div>
           </div>
@@ -216,7 +214,7 @@ export function AppNavbar() {
                   {userHandle}
                 </span>
                 <span className="text-xs text-muted-foreground leading-tight capitalize">
-                  {user?.role ?? ""}
+                  {user?.role ? user.role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : ""}
                 </span>
               </div>
             </div>

@@ -4,9 +4,106 @@ import { useEffect, useState } from "react"
 import { ScoreGauge } from "@/components/score-gauge"
 import { FactorCard } from "@/components/factor-card"
 import { ScoreHistoryChart } from "@/components/score-history-chart"
+import { ScoreHistoryTimeline } from "@/components/score-history-timeline"
 import { ProfileSummary } from "@/components/profile-summary"
 import { ScoreInsights } from "@/components/score-insights"
-import { calculateScore, getScoreHistory, getMyProfile, getCurrentUser } from "@/lib/api"
+import { calculateScore, getScoreHistory, getDailyScores, getMyProfile, getCurrentUser } from "@/lib/api"
+import Link from "next/link"
+import { Upload, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+function ScoreHistorySection({ monthlyData, timeline }: { monthlyData: any[]; timeline: any[] }) {
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [dailyData, setDailyData] = useState<any[]>([])
+  const [loadingDaily, setLoadingDaily] = useState(false)
+
+  const availableMonths = [...new Set(monthlyData.map((d) => d.rawPeriod).filter(Boolean))]
+
+  async function handleMonthSelect(month: string | null) {
+    setSelectedMonth(month)
+    if (!month) { setDailyData([]); return }
+    setLoadingDaily(true)
+    try {
+      const res = await getDailyScores(month)
+      setDailyData(res.data.daily.map((d: any) => ({
+        date: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        score: d.score,
+      })))
+    } finally {
+      setLoadingDaily(false)
+    }
+  }
+
+  const chartData = selectedMonth ? dailyData : monthlyData
+
+  return (
+    <div>
+      {/* Month filter */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <button
+          type="button"
+          onClick={() => handleMonthSelect(null)}
+          className={cn(
+            "px-3 py-1 rounded-full text-xs font-medium transition-colors border",
+            !selectedMonth
+              ? "bg-primary text-primary-foreground border-primary"
+              : "text-muted-foreground border-border hover:border-primary hover:text-foreground"
+          )}
+        >
+          All months
+        </button>
+        {availableMonths.map((m: string) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => handleMonthSelect(m)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium transition-colors border",
+              selectedMonth === m
+                ? "bg-primary text-primary-foreground border-primary"
+                : "text-muted-foreground border-border hover:border-primary hover:text-foreground"
+            )}
+          >
+            {new Date(m + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+          </button>
+        ))}
+      </div>
+
+      {loadingDaily ? (
+        <div className="h-[260px] flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading daily scores...</p>
+        </div>
+      ) : (
+        <ScoreHistoryChart data={chartData} />
+      )}
+
+      <TimelineSection entries={timeline} />
+    </div>
+  )
+}
+
+function TimelineSection({ entries }: { entries: any[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-6 pt-6 border-t border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 w-full text-left"
+      >
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">
+          Timeline
+        </p>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="mt-4">
+          <ScoreHistoryTimeline entries={entries} />
+        </div>
+      )}
+    </div>
+  )
+}
 import { mockCreditScore } from "@/lib/mock-data"
 import {
   Tooltip,
@@ -21,6 +118,7 @@ export default function DashboardPage() {
   const [profileUser, setProfileUser] = useState<any>(null)
   const [factors, setFactors] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
+  const [timeline, setTimeline] = useState<any[]>([])
   const [eligibility, setEligibility] = useState<"insufficient" | "preliminary" | "official" | null>(null)
   const [monthsCount, setMonthsCount] = useState(0)
   const [scoreVersion, setScoreVersion] = useState<number | null>(null)
@@ -30,8 +128,20 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const [profileRes, userRes] = await Promise.all([getMyProfile(), getCurrentUser()])
-        const profile = profileRes.data
+        const userRes = await getCurrentUser()
+
+        let profile: any = null
+        try {
+          const profileRes = await getMyProfile()
+          profile = profileRes.data
+        } catch (err: any) {
+          if (err?.response?.status === 404) {
+            setError("No uploaded profile found. Please upload your work data first.")
+            setLoading(false)
+            return
+          }
+          throw err
+        }
 
         setProfileUser({
           id: profile.user_id,
@@ -41,6 +151,9 @@ export default function DashboardPage() {
           eligibility: profile.eligibility,
         })
 
+        // Sequential, not parallel: calculateScore() may insert a new history
+        // entry, so history must be fetched after it finishes or the GET can
+        // race the POST and come back empty on the very first calculation.
         const scoreRes = await calculateScore()
         const historyRes = await getScoreHistory()
 
@@ -140,20 +253,34 @@ export default function DashboardPage() {
           }
         )
 
-        const historyData = historyRes.data.history.map((item: any) => ({
-          date: new Date(item.created_at).toLocaleDateString(),
+        // Deduplicate by data_period — keep one entry per month (newest-first from API)
+        const seen = new Set<string>()
+        const deduped = historyRes.data.history.filter((item: any) => {
+          const key = item.data_period ?? item.created_at
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        const rawHistory = [...deduped].reverse() // oldest first
+        const historyData = rawHistory.map((item: any) => ({
+          date: item.data_period
+            ? new Date(item.data_period + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })
+            : new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
           score: item.score_value,
+          rawPeriod: item.data_period ?? null,
+        }))
+        const timelineData = [...rawHistory].reverse().map((item: any, idx: number, arr: any[]) => ({
+          ...item,
+          previousScore: arr[idx + 1]?.score_value ?? null,
         }))
 
         setScore(latestScore)
         setFactors(factorData)
         setHistory(historyData)
+        setTimeline(timelineData)
       } catch (error: any) {
-        console.error("Dashboard load failed:", error)
-
-        if (error.response?.status === 404) {
-          setError("No uploaded profile found. Please upload your CSV data first.")
-        } else if (error.response?.status === 401) {
+        if (error?.response?.status === 401) {
           setError("You are not logged in. Please log in again.")
         } else {
           setError("Failed to load dashboard data.")
@@ -171,10 +298,46 @@ export default function DashboardPage() {
   }
 
   if (error) {
+    const isNoData = error.includes("No uploaded profile")
     return (
-      <div className="rounded-xl border border-border bg-card p-6 max-w-3xl mx-auto space-y-3">
-        <h1 className="text-xl font-semibold text-foreground">Dashboard unavailable</h1>
-        <p className="text-sm text-muted-foreground">{error}</p>
+      <div className="max-w-2xl mx-auto mt-12 space-y-6">
+        {isNoData ? (
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="bg-gradient-to-br from-primary/10 to-primary/5 px-8 py-10 text-center">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mx-auto mb-4">
+                <Upload className="w-7 h-7 text-primary" />
+              </div>
+              <h1 className="text-xl font-bold text-foreground">Your dashboard is waiting</h1>
+              <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto leading-relaxed">
+                Upload your gig work data to generate your credit score. It only takes a few seconds.
+              </p>
+            </div>
+            <div className="px-8 py-6 space-y-4">
+              {[
+                { dot: "bg-destructive", label: "0 – 2 months", desc: "Not enough data yet" },
+                { dot: "bg-warning",     label: "3 – 5 months", desc: "Preliminary Score unlocked" },
+                { dot: "bg-success",     label: "6+ months",    desc: "Official GigCredit Score" },
+              ].map((t) => (
+                <div key={t.label} className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${t.dot}`} />
+                  <span className="text-sm font-medium text-foreground">{t.label}</span>
+                  <span className="text-sm text-muted-foreground">— {t.desc}</span>
+                </div>
+              ))}
+              <Link href="/dashboard/upload">
+                <button className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium px-4 py-3 hover:bg-primary/90 transition-colors">
+                  <Upload className="w-4 h-4" />
+                  Upload my work data
+                </button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card p-6 space-y-3">
+            <h1 className="text-xl font-semibold text-foreground">Dashboard unavailable</h1>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -207,14 +370,33 @@ export default function DashboardPage() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-base font-semibold text-card-foreground mb-4">
-          Score History
-        </h2>
-        <ScoreHistoryChart data={history} />
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-card-foreground">
+            Score History
+          </h2>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                <p className="font-medium mb-1">How does this work?</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  A new point is only added here when your score actually changes — usually after you upload new work data. The chart shows the trend; the list below explains exactly why each change happened, generated from the same AI explainability model used in Score Factors.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          How your score has changed over time, and why
+        </p>
+
+        <ScoreHistorySection monthlyData={history} timeline={timeline} />
       </div>
 
-      <div>
-        <div data-tour="score-factors" className="mb-4">
+      <div data-tour="score-factors">
+        <div className="mb-4">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-foreground">
               Score Factors
@@ -238,7 +420,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
           {factors.map((factor) => (
             <FactorCard key={factor.key} factor={factor} />
           ))}

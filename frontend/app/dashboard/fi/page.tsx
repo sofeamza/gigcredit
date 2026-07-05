@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Search, ShieldCheck, Download } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -104,47 +104,125 @@ export default function FIDashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const downloadPDF = async () => {
+  const downloadWorkerPDF = async (s: typeof scores[0]) => {
     const { jsPDF } = await import("jspdf")
     const autoTable = (await import("jspdf-autotable")).default
+    const { getWorkerHistory } = await import("@/lib/api")
 
-    const doc = new jsPDF({ orientation: "landscape" })
+    let history: any[] = []
+    try {
+      const res = await getWorkerHistory(s.user_email)
+      history = res.data.history ?? []
+    } catch {
+      // proceed without history if fetch fails
+    }
 
+    const doc = new jsPDF()
+    const blue: [number, number, number] = [37, 99, 235]
+    const altRow: [number, number, number] = [245, 248, 255]
+
+    // Header
     doc.setFontSize(16)
     doc.setFont("helvetica", "bold")
-    doc.text("GigCredit — Worker Credit Score Report", 14, 18)
+    doc.text("GigCredit — Worker Credit Report", 14, 18)
 
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
     doc.setFont("helvetica", "normal")
-    doc.setTextColor(100)
-    doc.text(`Generated: ${new Date().toLocaleString("en-MY")}  ·  Confidential — For authorised financial institution use only`, 14, 25)
+    doc.setTextColor(120)
+    doc.text(
+      `Generated: ${new Date().toLocaleString("en-MY")}  ·  Confidential — For authorised financial institution use only`,
+      14, 25
+    )
     doc.setTextColor(0)
 
-    const rows = scores.map((s) => [
-      s.user_email,
-      String(s.score_value),
-      s.score_value >= 700 ? "Good" : s.score_value >= 580 ? "Fair" : "Poor",
-      s.eligibility
-        ? s.eligibility.charAt(0).toUpperCase() + s.eligibility.slice(1)
-        : "—",
-      s.months_count != null ? `${s.months_count} mo.` : "—",
-      s.version ? `v${s.version}` : "—",
-      s.model_used ?? "—",
-      s.created_at
-        ? new Date(s.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })
-        : "—",
-    ])
+    // Section: Credit Score Summary
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("Credit Score Summary", 14, 33)
 
     autoTable(doc, {
-      startY: 32,
-      head: [["Worker", "Score", "Category", "Score Status", "Data", "Version", "Model", "Last Updated"]],
-      body: rows,
-      styles: { fontSize: 8.5, cellPadding: 3 },
-      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [245, 248, 255] },
+      startY: 37,
+      head: [["Field", "Value"]],
+      body: [
+        ["Worker Email", s.user_email],
+        ["Credit Score", String(s.score_value)],
+        ["Category", s.score_value >= 700 ? "Good" : s.score_value >= 580 ? "Fair" : "Poor"],
+        ["Score Status", s.eligibility ? s.eligibility.charAt(0).toUpperCase() + s.eligibility.slice(1) : "—"],
+        ["Months of Data", s.months_count != null ? `${s.months_count} months` : "—"],
+        ["Model Used", s.model_used ?? "—"],
+        ["Score Version", s.version ? `v${s.version}` : "—"],
+        ["Last Updated", s.created_at ? new Date(s.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" }) : "—"],
+      ],
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: blue, textColor: 255, fontStyle: "bold" },
+      columnStyles: { 0: { fontStyle: "bold", cellWidth: 55 } },
     })
 
-    doc.save(`gigcredit-worker-scores-${new Date().toISOString().slice(0, 10)}.pdf`)
+    // Section: SHAP Score Factors
+    const factors = parseExplanation(s.explanation)
+    if (factors.length > 0) {
+      const y1 = (doc as any).lastAutoTable.finalY + 10
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "bold")
+      doc.text("Score Factor Breakdown (SHAP)", 14, y1)
+
+      autoTable(doc, {
+        startY: y1 + 4,
+        head: [["Factor", "Direction", "Points Contributed"]],
+        body: factors.map((f) => [
+          f.name,
+          f.value > 0 ? "Positive ▲" : "Negative ▼",
+          `${f.value > 0 ? "+" : ""}${f.value.toFixed(1)} pts`,
+        ]),
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: blue, textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: altRow },
+        didParseCell: (data: any) => {
+          if (data.column.index === 2 && data.section === "body") {
+            const raw = data.cell.text[0] ?? ""
+            data.cell.styles.textColor = raw.startsWith("+") ? [22, 163, 74] : [220, 38, 38]
+          }
+        },
+      })
+    }
+
+    // Section: Monthly Work History
+    if (history.length > 0) {
+      const y2 = (doc as any).lastAutoTable.finalY + 10
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "bold")
+      doc.text("Monthly Work History", 14, y2)
+
+      autoTable(doc, {
+        startY: y2 + 4,
+        head: [[
+          "Month",
+          "Platform",
+          "Tasks Done",
+          "Completion Rate",
+          "Active Days",
+          "Earnings (RM)",
+          "GPS Consistency",
+          "Avg Rating",
+        ]],
+        body: history.map((r: any) => [
+          r.month,
+          r.platform_name,
+          String(r.tasks_completed ?? "—"),
+          r.task_completion_rate != null ? `${(r.task_completion_rate * 100).toFixed(1)}%` : "—",
+          String(r.active_days ?? "—"),
+          r.total_earnings != null ? Number(r.total_earnings).toFixed(2) : "—",
+          r.gps_consistency != null ? `${(r.gps_consistency * 100).toFixed(1)}%` : "—",
+          r.customer_rating != null ? Number(r.customer_rating).toFixed(2) : "—",
+        ]),
+        styles: { fontSize: 8.5, cellPadding: 2.5 },
+        headStyles: { fillColor: blue, textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: altRow },
+      })
+    }
+
+    const safeName = s.user_email.replace(/[@.]/g, "_")
+    doc.save(`gigcredit-${safeName}-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   const filtered = scores.filter((s) =>
@@ -167,16 +245,6 @@ export default function FIDashboardPage() {
             Read-only view of worker credit scores and SHAP explanations
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 shrink-0"
-          onClick={downloadPDF}
-          disabled={scores.length === 0}
-        >
-          <Download className="w-4 h-4" />
-          Download PDF
-        </Button>
       </div>
 
       {/* Access notice */}
@@ -235,9 +303,8 @@ export default function FIDashboardPage() {
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <>
+                  <React.Fragment key={s.user_email}>
                     <tr
-                      key={s.user_email}
                       className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => {
                         const next = expanded === s.user_email ? null : s.user_email
@@ -293,16 +360,24 @@ export default function FIDashboardPage() {
                             <p className="text-xs font-semibold text-card-foreground uppercase tracking-wider">
                               SHAP Score Breakdown
                             </p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-success/70 inline-block" /> Positive impact</span>
-                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-destructive/70 inline-block" /> Negative impact</span>
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-success/70 inline-block" /> Positive impact</span>
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-destructive/70 inline-block" /> Negative impact</span>
+                              </div>
+                              {s.eligibility === "official" && (
+                                <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => downloadWorkerPDF(s)}>
+                                  <Download className="w-3.5 h-3.5" />
+                                  Download PDF
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <ShapChart factors={parseExplanation(s.explanation)} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
                 {filtered.length === 0 && (
                   <tr>

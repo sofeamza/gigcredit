@@ -71,7 +71,11 @@ function WorkerScoresTable({ scores }: { scores: any[] }) {
                       <Badge variant="secondary" className={cn("text-xs border-0 whitespace-nowrap", eligCfg.className)}>
                         {eligCfg.label}
                       </Badge>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                    ) : (
+                      <Badge variant="secondary" className="text-xs border-0 whitespace-nowrap bg-muted text-muted-foreground">
+                        No data uploaded
+                      </Badge>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
                     {s.months_count ?? "—"} mo.
@@ -134,9 +138,9 @@ export default function AdminPage() {
         id: user.email || `user-${index}`,
         name: user.email?.split("@")[0] || "Unknown User",
         email: user.email,
-        role: user.role,
+        role: user.role ?? "user",
+        lastActive: user.created_at ?? null,
         status: "active",
-        joinedAt: "N/A",
       }))
 
       const backendStats = statsRes.data
@@ -150,19 +154,24 @@ export default function AdminPage() {
         totalScores: backendStats.total_scores,
 
         scoreDistribution: [
-          {
-            label: "Poor",
-            value: backendStats.score_distribution.poor,
-          },
-          {
-            label: "Fair",
-            value: backendStats.score_distribution.fair,
-          },
-          {
-            label: "Good",
-            value: backendStats.score_distribution.good,
-          },
+          { category: "Poor",  count: backendStats.score_distribution.poor },
+          { category: "Fair",  count: backendStats.score_distribution.fair },
+          { category: "Good",  count: backendStats.score_distribution.good },
         ],
+
+        userGrowth: (() => {
+          const byMonth: Record<string, number> = {}
+          for (const u of usersRes.data.users) {
+            if (!u.created_at) continue
+            const month = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+            byMonth[month] = (byMonth[month] ?? 0) + 1
+          }
+          // cumulative count, sorted chronologically
+          let cumulative = 0
+          return Object.entries(byMonth)
+            .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+            .map(([month, count]) => ({ month, users: (cumulative += count) }))
+        })(),
 
         systemHealth: {
             api: backendStats.api_health === "healthy" ? "healthy" : "warning",

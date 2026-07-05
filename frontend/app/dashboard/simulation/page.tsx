@@ -32,6 +32,86 @@ import {
   runSimulation,
 } from "@/lib/api"
 
+const FACTOR_META: Record<string, { label: string; emoji: string; tip: string }> = {
+  task_completion_rate: {
+    label: "Task Completion",
+    emoji: "✅",
+    tip: "Complete more of your accepted jobs each month.",
+  },
+  gps_consistency: {
+    label: "GPS Consistency",
+    emoji: "📍",
+    tip: "Keep your GPS active and maintain regular routes.",
+  },
+  customer_rating: {
+    label: "Customer Rating",
+    emoji: "⭐",
+    tip: "Timely, polite service earns higher ratings.",
+  },
+  platform_diversity: {
+    label: "Platform Diversity",
+    emoji: "🔗",
+    tip: "Working on more platforms shows income resilience.",
+  },
+}
+
+function parseShap(lines: string[]) {
+  return lines.map((line) => {
+    const match = line.match(/^(\S+)\s+(increased|decreased)\s+your score by ([\d.]+) points/)
+    if (!match) return null
+    const key = match[1]
+    const positive = match[2] === "increased"
+    const pts = parseFloat(match[3])
+    const meta = FACTOR_META[key]
+    return { key, label: meta?.label ?? key, emoji: meta?.emoji ?? "📊", tip: meta?.tip, positive, pts }
+  }).filter(Boolean) as { key: string; label: string; emoji: string; tip?: string; positive: boolean; pts: number }[]
+}
+
+function ShapBreakdown({ explanations }: { explanations: string[] }) {
+  const factors = parseShap(explanations)
+  if (factors.length === 0) return null
+
+  const max = Math.max(...factors.map((f) => f.pts), 1)
+
+  return (
+    <div className="pt-2 space-y-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        What's driving this score?
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Each value shows how much that factor pushed your score above or below the average worker.
+      </p>
+
+      {factors.map((f) => (
+        <div key={f.key} className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-card-foreground flex items-center gap-1.5">
+              <span>{f.emoji}</span>
+              {f.label}
+            </span>
+            <span className={`text-xs font-semibold tabular-nums ${f.positive ? "text-success" : "text-destructive"}`}>
+              {f.positive ? "+" : "−"}{f.pts} pts
+            </span>
+          </div>
+
+          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${f.positive ? "bg-primary" : "bg-destructive"}`}
+              style={{ width: `${(f.pts / max) * 100}%` }}
+            />
+          </div>
+
+          {f.tip && !f.positive && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              💡 To improve — {f.tip}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 interface FactorSlider {
   key: keyof FactorInput
   name: string
@@ -313,11 +393,11 @@ export default function SimulationPage() {
 
             <ScoreGauge
               score={hasSimulated ? projectedScore : currentScore}
-              size="lg"
+              size="sm"
             />
 
-            <div className="space-y-16">
-              <div className="flex items-center justify-center gap-3 mt-24">
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-6 mt-12">
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground">Current</p>
                   <p className="text-lg font-bold text-card-foreground">
@@ -390,26 +470,7 @@ export default function SimulationPage() {
                     </p>
                   </div>
 
-                  <div className="space-y-2 pt-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      SHAP Explanation
-                    </p>
-
-                    {explanations.length > 0 ? (
-                      explanations.map((text, index) => (
-                        <div
-                          key={index}
-                          className="text-sm text-muted-foreground rounded-lg border border-border p-3"
-                        >
-                          {text}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No explanation returned.
-                      </p>
-                    )}
-                  </div>
+                  <ShapBreakdown explanations={explanations} />
                 </>
               )}
 

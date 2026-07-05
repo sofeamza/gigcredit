@@ -31,9 +31,7 @@ export function MobileNav() {
     <div className="lg:hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-            <CreditCard className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="GigCredit" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-base font-semibold tracking-tight text-card-foreground">GigCredit</span>
         </div>
         <Button

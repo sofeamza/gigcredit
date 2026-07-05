@@ -45,6 +45,11 @@ export default function LoginPage() {
 
       localStorage.setItem("token", res.data.token)
 
+      if (!isLogin) {
+        localStorage.removeItem("hasSeenOnboarding")
+        localStorage.setItem("gigcredit_new_user", "true")
+      }
+
       const userRes = await getCurrentUser()
 
       const role = userRes.data.role
@@ -68,9 +73,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-sidebar text-sidebar-foreground flex-col justify-between p-12">
         <div>
           <div className="flex items-center gap-3 mb-16">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary">
-              <CreditCard className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src="/logo.png" alt="GigCredit" className="w-10 h-10 rounded-xl object-contain" />
             <span className="text-xl font-semibold text-sidebar-primary-foreground tracking-tight">
               GigCredit
             </span>
@@ -129,9 +132,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary">
-              <CreditCard className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src="/logo.png" alt="GigCredit" className="w-9 h-9 rounded-lg object-contain" />
             <span className="text-lg font-semibold tracking-tight">
               GigCredit
             </span>

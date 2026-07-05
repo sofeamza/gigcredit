@@ -34,6 +34,8 @@ interface Institution {
   fi_status: "active" | "suspended"
   created_at: string
   profile_views: number
+  suspend_count: number
+  reactivate_count: number
 }
 
 interface Summary {
@@ -114,7 +116,16 @@ export default function FinancialInstitutionsPage() {
     try {
       await updateFIStatus(inst.email, next)
       setInstitutions((prev) =>
-        prev.map((i) => (i.email === inst.email ? { ...i, fi_status: next } : i))
+        prev.map((i) =>
+          i.email === inst.email
+            ? {
+                ...i,
+                fi_status: next,
+                suspend_count: next === "suspended" ? (i.suspend_count ?? 0) + 1 : i.suspend_count,
+                reactivate_count: next === "active" ? (i.reactivate_count ?? 0) + 1 : i.reactivate_count,
+              }
+            : i
+        )
       )
       setSummary((s) => ({
         ...s,
@@ -339,24 +350,40 @@ export default function FinancialInstitutionsPage() {
                       Viewed {inst.profile_views} profile{inst.profile_views !== 1 ? "s" : ""}
                     </td>
                     <td className="px-5 py-3.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={statusLoading === inst.email}
-                        onClick={() => handleStatusToggle(inst)}
-                        className={cn(
-                          "text-xs h-7 bg-transparent",
-                          inst.fi_status === "active"
-                            ? "text-destructive hover:text-destructive"
-                            : "text-success hover:text-success"
-                        )}
-                      >
-                        {statusLoading === inst.email
-                          ? "..."
-                          : inst.fi_status === "active"
-                            ? <><Ban className="w-3 h-3 mr-1" />Suspend</>
-                            : <><CheckCircle2 className="w-3 h-3 mr-1" />Reactivate</>}
-                      </Button>
+                      {(() => {
+                        const suspendCount = inst.suspend_count ?? 0
+                        const reactivateCount = inst.reactivate_count ?? 0
+                        const canSuspend = inst.fi_status === "active" && suspendCount < 2
+                        const canReactivate = inst.fi_status === "suspended" && reactivateCount < 1
+                        const isActive = inst.fi_status === "active"
+                        const isDisabled = statusLoading === inst.email || (isActive ? !canSuspend : !canReactivate)
+                        const limitMsg = isActive
+                          ? "Maximum of 2 suspensions reached"
+                          : "Can only be reactivated once"
+
+                        return (
+                          <div title={isDisabled && statusLoading !== inst.email ? limitMsg : undefined}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isDisabled}
+                              onClick={() => handleStatusToggle(inst)}
+                              className={cn(
+                                "text-xs h-7 bg-transparent",
+                                isActive
+                                  ? "text-destructive hover:text-destructive"
+                                  : "text-success hover:text-success"
+                              )}
+                            >
+                              {statusLoading === inst.email
+                                ? "..."
+                                : isActive
+                                  ? <><Ban className="w-3 h-3 mr-1" />Suspend ({suspendCount}/2)</>
+                                  : <><CheckCircle2 className="w-3 h-3 mr-1" />Reactivate ({reactivateCount}/1)</>}
+                            </Button>
+                          </div>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}

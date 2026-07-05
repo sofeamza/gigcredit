@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import users_col, profiles_col, scores_col, explanations_col, fi_access_logs_col
+from config import users_col, profiles_col, scores_col, explanations_col, fi_access_logs_col, upload_batches_col
 
 from routes.auth import router as auth_router
 from routes.score import router as score_router
@@ -36,6 +36,7 @@ def create_indexes():
     scores_col.create_index([("user_id", 1), ("calculated_at", -1)])
     explanations_col.create_index("score_id")
     fi_access_logs_col.create_index([("fi_email", 1), ("accessed_at", -1)])
+    upload_batches_col.create_index([("user_email", 1), ("uploaded_at", -1)])
 
     print("Indexes created successfully")
 
