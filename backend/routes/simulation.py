@@ -21,7 +21,7 @@ def make_cache_key(profile: Profile, user_email: str):
     return hashlib.md5(raw.encode()).hexdigest()
 
 
-@router.post("")
+@router.post("", summary="Simulate a credit score", description="Runs the scoring engine against a hypothetical profile without saving any data. Useful for workers to see how improving a specific metric (e.g. task completion rate) would affect their credit score. Results are cached for 15 minutes.")
 def simulate_score(
     profile: Profile,
     current_user: dict = Depends(get_current_user)

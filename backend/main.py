@@ -8,7 +8,28 @@ from routes.score import router as score_router
 from routes.simulation import router as simulation_router
 from routes.data import router as data_router
 
-app = FastAPI(title="GigCredit API")
+app = FastAPI(
+    title="GigCredit — Transparent Credit Scoring API",
+    description=(
+        "A credit scoring API for gig economy workers using alternative data. "
+        "Instead of traditional credit bureau data, GigCredit analyses daily work records "
+        "from platforms such as Grab, Foodpanda, and Lalamove — including task completion rate, "
+        "GPS consistency, customer ratings, and earnings — to produce a transparent, explainable "
+        "credit score powered by machine learning and SHAP (SHapley Additive exPlanations).\n\n"
+        "**Authentication:** All protected endpoints require a JWT bearer token obtained from `POST /auth/login`.\n\n"
+        "**Roles:** `worker` (upload data, view own score), `admin` (manage users and institutions), "
+        "`financial_institution` (view worker scores for lending decisions)."
+    ),
+    version="1.0.0",
+    contact={"name": "GigCredit"},
+    openapi_tags=[
+        {"name": "Auth",       "description": "Register, log in, and verify identity."},
+        {"name": "Data",       "description": "Upload alternative data files and manage work history."},
+        {"name": "Score",      "description": "Calculate and retrieve transparent, SHAP-explained credit scores."},
+        {"name": "Simulation", "description": "Simulate score outcomes for hypothetical profile inputs."},
+        {"name": "Admin",      "description": "Platform administration and financial institution management."},
+    ],
+)
 
 # CORS
 app.add_middleware(

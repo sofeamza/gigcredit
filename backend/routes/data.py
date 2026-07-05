@@ -185,7 +185,7 @@ def _aggregate_daily_to_monthly(df: pd.DataFrame) -> list[dict]:
     return results
 
 
-@router.post("/upload")
+@router.post("/upload", summary="Upload work data", description="Accepts a CSV or Excel file containing daily gig work records. Uses AI-assisted column mapping to handle non-standard headers, validates each month-platform combination, and stores accepted data for score calculation. Returns a per-month validation summary.")
 async def upload_data(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -387,7 +387,7 @@ async def upload_data(
     }
 
 
-@router.get("/upload-history")
+@router.get("/upload-history", summary="List past uploads", description="Returns all file upload batches for the authenticated worker, sorted by upload date. Each batch includes validation results per month and platform.")
 def get_upload_history(current_user: dict = Depends(get_current_user)):
     batches = list(upload_batches_col.find(
         {"user_email": current_user["email"]},
@@ -396,7 +396,7 @@ def get_upload_history(current_user: dict = Depends(get_current_user)):
     return {"batches": batches}
 
 
-@router.delete("/upload-history/{batch_id}")
+@router.delete("/upload-history/{batch_id}", summary="Delete an upload batch", description="Removes a file upload batch and all associated monthly profile data for that batch. Scores will be recalculated on next dashboard load.")
 def delete_upload_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
     batch = upload_batches_col.find_one({
         "batch_id":   batch_id,
@@ -414,7 +414,7 @@ def delete_upload_batch(batch_id: str, current_user: dict = Depends(get_current_
     return {"status": "deleted", "batch_id": batch_id}
 
 
-@router.get("/worker-history/{worker_email}")
+@router.get("/worker-history/{worker_email}", summary="Worker profile history (FI only)", description="Returns the full monthly profile history for a specific gig worker. Restricted to financial institution accounts. Used by lenders to assess a worker's alternative data track record.")
 def get_worker_history(worker_email: str, current_user: dict = Depends(get_current_user)):
     user = users_col.find_one({"email": current_user["email"]})
     if not user or user.get("role") != "financial_institution":
@@ -440,7 +440,7 @@ def get_worker_history(worker_email: str, current_user: dict = Depends(get_curre
     return {"worker_email": worker_email, "history": records}
 
 
-@router.get("/my-profile")
+@router.get("/my-profile", summary="Get worker's aggregated profile", description="Returns the authenticated worker's monthly aggregated alternative data metrics: task completion rate, GPS consistency, customer rating, platform diversity, and earnings — the raw inputs used by the scoring engine.")
 def get_my_profile(current_user: dict = Depends(get_current_user)):
     profiles = list(profiles_col.find(
         {"user_email": current_user["email"]},

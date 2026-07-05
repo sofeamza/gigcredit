@@ -35,7 +35,7 @@ def require_active_fi(current_user: dict = Depends(get_current_user)):
 
 # ── Admin stats ───────────────────────────────────────────────────────────────
 
-@router.get("/stats")
+@router.get("/stats", summary="System-wide statistics", description="Returns platform health metrics including total users, average credit score, score distribution by band (poor/fair/good), and API health status. Admin only.")
 def get_admin_stats(admin: dict = Depends(require_admin)):
     total_users = users_col.count_documents({})
     total_profiles = profiles_col.count_documents({})
@@ -65,7 +65,7 @@ def get_admin_stats(admin: dict = Depends(require_admin)):
 
 # ── User management ───────────────────────────────────────────────────────────
 
-@router.get("/users")
+@router.get("/users", summary="List all users", description="Returns all registered users including gig workers and financial institutions with their roles and registration dates. Admin only.")
 def get_users(admin: dict = Depends(require_admin)):
     users = list(users_col.find({}, {"_id": 0, "email": 1, "role": 1, "created_at": 1}))
     return {"users": users}
@@ -91,7 +91,7 @@ class UpdateFIStatusRequest(BaseModel):
     status: Literal["active", "suspended"]
 
 
-@router.post("/financial-institutions")
+@router.post("/financial-institutions", summary="Register a financial institution", description="Creates a financial institution account that can access gig worker credit scores via the API. Admin only. Each institution can be suspended up to 2 times and reactivated once.")
 def create_financial_institution(req: CreateFIRequest, admin: dict = Depends(require_admin)):
     if users_col.find_one({"email": req.email}):
         raise HTTPException(status_code=400, detail="User already exists")
@@ -108,7 +108,7 @@ def create_financial_institution(req: CreateFIRequest, admin: dict = Depends(req
     return {"message": f"Financial institution '{req.institution_name}' created"}
 
 
-@router.get("/financial-institutions")
+@router.get("/financial-institutions", summary="List financial institutions", description="Returns all registered financial institutions with their status, profile view counts, and suspension/reactivation history. Admin only.")
 def get_financial_institutions(admin: dict = Depends(require_admin)):
     institutions = list(users_col.find(
         {"role": "financial_institution"},
@@ -135,7 +135,7 @@ def get_financial_institutions(admin: dict = Depends(require_admin)):
     }
 
 
-@router.patch("/financial-institutions/{email}/status")
+@router.patch("/financial-institutions/{email}/status", summary="Suspend or reactivate a financial institution", description="Updates a financial institution's access status. Suspending blocks all API access for that institution. Maximum 2 suspensions and 1 reactivation per institution. Admin only.")
 def update_fi_status(email: str, req: UpdateFIStatusRequest, admin: dict = Depends(require_admin)):
     fi = users_col.find_one({"email": email, "role": "financial_institution"})
     if not fi:
@@ -165,7 +165,7 @@ def update_fi_status(email: str, req: UpdateFIStatusRequest, admin: dict = Depen
 
 # ── FI access log ─────────────────────────────────────────────────────────────
 
-@router.get("/fi-access-logs")
+@router.get("/fi-access-logs", summary="Financial institution access audit log", description="Returns the 200 most recent profile views by financial institutions. Provides full transparency on which institution accessed which worker's score and when. Admin only.")
 def get_fi_access_logs(admin: dict = Depends(require_admin)):
     logs = list(fi_access_logs_col.find(
         {},
@@ -180,7 +180,7 @@ class LogFIAccessRequest(BaseModel):
     score_value: float
 
 
-@router.post("/fi-access-logs")
+@router.post("/fi-access-logs", summary="Log a profile view", description="Records that a financial institution has viewed a specific worker's credit score. Creates an immutable audit trail for transparency and regulatory accountability.")
 def log_fi_access(req: LogFIAccessRequest, current_user: dict = Depends(require_active_fi)):
     user = users_col.find_one({"email": current_user["email"]})
     fi_access_logs_col.insert_one({
@@ -195,7 +195,7 @@ def log_fi_access(req: LogFIAccessRequest, current_user: dict = Depends(require_
 
 # ── Read-only stats for FI ────────────────────────────────────────────────────
 
-@router.get("/worker-scores")
+@router.get("/worker-scores", summary="All worker credit scores", description="Returns the latest credit score for every gig worker on the platform, including eligibility status and SHAP-based explanation. Accessible by admin and financial institutions for lending assessments.")
 def get_worker_scores(current_user: dict = Depends(require_admin_or_fi)):
     pipeline = [
         {"$sort": {"data_period": -1}},

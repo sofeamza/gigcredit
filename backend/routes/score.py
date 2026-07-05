@@ -101,7 +101,7 @@ def _compute_all_monthly_scores(user_email: str, all_monthly: list) -> list:
     return list(reversed(results))  # newest first
 
 
-@router.post("/calculate")
+@router.post("/calculate", summary="Calculate credit scores", description="Computes a rolling weighted credit score for every month of uploaded data. Uses a trained ML model with SHAP explainability. Deletes stale entries and regenerates one score document per data month.")
 def calculate_score(current_user: dict = Depends(get_current_user)):
     raw_profiles = list(profiles_col.find(
         {"user_email": current_user["email"]},
@@ -130,7 +130,7 @@ def calculate_score(current_user: dict = Depends(get_current_user)):
     }
 
 
-@router.get("/daily")
+@router.get("/daily", summary="Daily score progression for a month", description="Returns a day-by-day running credit score for the specified month (format: YYYY-MM). Each data point reflects cumulative performance up to that day, combined with the rolling window of prior months.")
 def get_daily_scores(month: str, current_user: dict = Depends(get_current_user)):
     """
     Return day-by-day running score for a specific month.
@@ -220,7 +220,7 @@ def get_daily_scores(month: str, current_user: dict = Depends(get_current_user))
     return {"daily": results, "month": month}
 
 
-@router.get("/history")
+@router.get("/history", summary="Monthly score history", description="Returns all monthly credit score entries for the authenticated worker, sorted newest first. Each entry includes the score value, eligibility status, SHAP-based explanation, and the data period it represents.")
 def get_score_history(current_user: dict = Depends(get_current_user)):
     history = list(
         scores_col.find(

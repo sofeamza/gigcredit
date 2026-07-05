@@ -15,7 +15,7 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6, max_length=72)
 
-@router.post("/register")
+@router.post("/register", summary="Register a new gig worker", description="Creates a new gig worker account and returns a JWT token for immediate authentication.")
 def register(req: RegisterRequest):
 
     existing = users_col.find_one({"email": req.email})
@@ -35,7 +35,7 @@ def register(req: RegisterRequest):
 
     return {"message": "User created", "token": token}
 
-@router.post("/login")
+@router.post("/login", summary="Authenticate and obtain a token", description="Validates credentials and returns a JWT bearer token. Include this token in the Authorization header for all protected endpoints.")
 def login(req: LoginRequest):
 
     user = users_col.find_one({"email": req.email})
@@ -53,7 +53,7 @@ def login(req: LoginRequest):
 from services.auth_service import get_current_user
 from fastapi import Depends
 
-@router.get("/me")
+@router.get("/me", summary="Get current user", description="Returns the authenticated user's email and role (worker, admin, or financial_institution).")
 def get_me(current_user: dict = Depends(get_current_user)):
     user = users_col.find_one(
         {"email": current_user["email"]},
